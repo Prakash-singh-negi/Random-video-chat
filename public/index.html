@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Video Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🎥 Random Video Chat</h1>
+            <p>Connect with strangers around the world!</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Start Screen -->
+            <div id="start-screen" class="screen active">
+                <div class="welcome-card">
+                    <h2>Welcome to Random Video Chat</h2>
+                    <p>Click the button below to start chatting with a random person</p>
+                    <button id="start-chat-btn" class="btn btn-primary">
+                        <span>Start Video Chat</span>
+                        <div class="btn-shine"></div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Waiting Screen -->
+            <div id="waiting-screen" class="screen">
+                <div class="waiting-card">
+                    <div class="spinner"></div>
+                    <h2>Looking for someone to chat with...</h2>
+                    <p>Please wait while we find you a chat partner</p>
+                    <button id="cancel-waiting-btn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Video Chat Screen -->
+            <div id="chat-screen" class="screen">
+                <div class="video-container">
+                    <div class="video-wrapper">
+                        <video id="remote-video" autoplay playsinline></video>
+                        <div class="video-label">Partner</div>
+                    </div>
+                    <div class="video-wrapper local">
+                        <video id="local-video" autoplay playsinline muted></video>
+                        <div class="video-label">You</div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <button id="toggle-video-btn" class="control-btn video-on" title="Toggle Video">
+                        <i class="icon-video-on">📹</i>
+                        <i class="icon-video-off">📹</i>
+                    </button>
+                    <button id="toggle-audio-btn" class="control-btn audio-on" title="Toggle Audio">
+                        <i class="icon-audio-on">🎤</i>
+                        <i class="icon-audio-off">🎤</i>
+                    </button>
+                    <button id="next-chat-btn" class="control-btn" title="Next Chat">
+                        <i>⏭️</i>
+                    </button>
+                    <button id="end-chat-btn" class="control-btn end-call" title="End Chat">
+                        <i>📞</i>
+                    </button>
+                    <button id="toggle-chat-btn" class="control-btn" title="Toggle Chat">
+                        <i>💬</i>
+                    </button>
+                </div>
+
+                <!-- Text Chat Panel -->
+                <div id="chat-panel" class="chat-panel">
+                    <div class="chat-header">
+                        <h3>Chat</h3>
+                        <button id="close-chat-btn" class="close-btn">×</button>
+                    </div>
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <div class="chat-input-container">
+                        <input type="text" id="chat-input" placeholder="Type a message..." />
+                        <button id="send-message-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Status Bar -->
+        <div id="status-bar" class="status-bar">
+            <span id="status-text">Ready to connect</span>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
