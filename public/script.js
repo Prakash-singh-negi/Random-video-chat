@@ -5,6 +5,8 @@ class VideoChat {
         this.remoteStream = null;
         this.peerConnection = null;
         this.currentRoom = null;
+        this.connectionState = 'idle'; // Track state
+        this.streamUsageCount = 0; // Track how many connections use the stream
         this.isVideoEnabled = true;
         this.isAudioEnabled = true;
         
@@ -43,6 +45,13 @@ class VideoChat {
         
         // Status
         this.statusText = document.getElementById('status-text');
+        
+        // Partner status indicators
+        this.partnerVideoStatus = document.getElementById('partner-video-status');
+        this.partnerAudioStatus = document.getElementById('partner-audio-status');
+        
+        // Debug button
+        this.debugMediaBtn = document.getElementById('debug-media-btn');
         
         console.log('Elements initialized');
     }
@@ -93,6 +102,11 @@ class VideoChat {
             this.sendMessage();
         });
         
+        this.debugMediaBtn.addEventListener('click', () => {
+            console.log('Debug media clicked');
+            this.debugMediaStates();
+        });
+        
         this.chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 console.log('Enter pressed in chat input');
@@ -120,23 +134,34 @@ class VideoChat {
             this.updateStatus('Looking for a chat partner...');
         });
 
-        this.socket.on('match-found', (data) => {
-            console.log('Match found:', data);
-            this.currentRoom = data.roomId;
-            this.showScreen('chat');
-            this.updateStatus('Connected! Setting up video...');
+this.socket.on('match-found', async (data) => {
+    console.log('Match found:', data);
 
-                // 🔥 NEW: Start periodic media monitoring
-    this.mediaCheckInterval = setInterval(() => {
-        this.checkMediaTransmission();
-    }, 5000); // Check every 5 seconds
-    
-            
-            if (data.isInitiator) {
-                console.log('Creating offer as initiator');
-                setTimeout(() => this.createOffer(), 1000);
-            }
-        });
+    this.currentRoom = data.roomId;
+    this.connectionState = 'matched';
+    this.showScreen('chat');
+    this.updateStatus('Connected! Setting up video...');
+
+    // Ensure local media is ready
+    if (!this.localStream) {
+        try {
+            await this.startVideoChat(); // reacquire media if missing
+            console.log('Local media reacquired after match-found.');
+        } catch (e) {
+            this.updateStatus('Could not access camera/mic');
+            console.error('Error getting local media after match-found:', e);
+            return;
+        }
+    }
+
+    this.setupPeerConnection();
+
+    if (data.isInitiator) {
+        console.log('Creating offer as initiator for room:', this.currentRoom);
+        setTimeout(() => this.createOffer(), 1000);
+    }
+});
+
 
         this.socket.on('offer', async (data) => {
             console.log('Received offer');
@@ -168,6 +193,11 @@ class VideoChat {
         this.socket.on('chat-message', (data) => {
             console.log('Received chat message:', data.message);
             this.displayMessage(data.message, 'received');
+        });
+
+        this.socket.on('media-toggle', (data) => {
+            console.log('Partner media toggle:', data);
+            this.handlePartnerMediaToggle(data);
         });
 
         this.socket.on('partner-left', () => {
@@ -241,161 +271,169 @@ class VideoChat {
         }
     }
 
-    async setupPeerConnection() {
-        console.log('Setting up peer connection...');
-        
-const configuration = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // Multiple TURN servers for better media relay
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:relay.backups.cz',
-            username: 'webrtc',
-            credential: 'webrtc'
-        }
-    ],
-    iceTransportPolicy: 'all',
-    // 🔥 MEDIA-SPECIFIC OPTIMIZATIONS:
-    iceCandidatePoolSize: 10,
-    bundlePolicy: 'max-bundle', // Bundle all media in one connection
-    rtcpMuxPolicy: 'require'    // Reduce port requirements
-};
-
-
-        this.peerConnection = new RTCPeerConnection(configuration);
-
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => {
-                console.log('Adding track to peer connection:', track.kind);
-                this.peerConnection.addTrack(track, this.localStream);
-            });
-        }
-
-// Replace your ontrack handler with this:
-this.peerConnection.ontrack = (event) => {
-    console.log('Received remote stream');
-    this.remoteStream = event.streams[0];
+async setupPeerConnection() {
+    console.log('Setting up peer connection for room:', this.currentRoom);
     
-    // 🔥 ENHANCED: Better cross-network video handling
-    this.remoteVideo.srcObject = this.remoteStream;
-    this.remoteVideo.autoplay = true;
-    this.remoteVideo.playsInline = true;
-    this.remoteVideo.muted = false; // Ensure not muted for cross-network
-    
-    // Force video to be visible
-    this.remoteVideo.style.display = 'block';
-    this.remoteVideo.style.opacity = '1';
-    
-    // Multiple play attempts
-    const playVideo = async () => {
-        try {
-            await this.remoteVideo.play();
-            console.log('✅ Remote video playing successfully');
-            
-            // Start media transmission monitoring
-            setTimeout(() => {
-                this.checkMediaTransmission();
-            }, 3000);
-            
-        } catch (error) {
-            console.log('❌ Remote video play failed:', error);
-            // Retry after 1 second
-            setTimeout(playVideo, 1000);
-        }
-    };
-    
-    this.remoteVideo.onloadedmetadata = () => {
-        console.log('Remote video metadata loaded');
-        console.log('Remote video dimensions:', this.remoteVideo.videoWidth, 'x', this.remoteVideo.videoHeight);
-        playVideo();
-    };
-    
-    // Immediate play attempt
-    playVideo();
-    
-    this.updateStatus('Video chat connected successfully!');
-};
-
-
-        this.peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                console.log('Sending ICE candidate:', event.candidate.type, event.candidate.protocol);
-                this.socket.emit('ice-candidate', {
-                    roomId: this.currentRoom,
-                    candidate: event.candidate
-                });
-            } else {
-                console.log('ICE candidate gathering complete');
-            }
-        };
-
-        this.peerConnection.oniceconnectionstatechange = () => {
-            const iceState = this.peerConnection.iceConnectionState;
-            console.log('ICE connection state:', iceState);
-            
-            switch (iceState) {
-                case 'checking':
-                    this.updateStatus('Establishing connection...');
-                    break;
-                case 'connected':
-                case 'completed':
-                    this.updateStatus('Connection established!');
-                    console.log('🎉 ICE CONNECTION SUCCESSFUL!');
-                    break;
-                case 'disconnected':
-                    console.log('ICE disconnected - waiting longer for reconnection...');
-                    this.updateStatus('Connection unstable - please wait...');
-                    this.iceReconnectTimeout = setTimeout(() => {
-                        if (this.peerConnection.iceConnectionState === 'disconnected') {
-                            console.log('ICE still disconnected after 10 seconds, restarting...');
-                            this.restartIce();
-                        }
-                    }, 10000);
-                    break;
-                case 'failed':
-                    console.log('ICE connection failed completely');
-                    this.updateStatus('Connection failed - trying different servers...');
-                    this.handleIceFailure();
-                    break;
-            }
-        };
-
-        this.peerConnection.onconnectionstatechange = () => {
-            const state = this.peerConnection.connectionState;
-            console.log('Connection state changed:', state);
-            
-            switch (state) {
-                case 'connected':
-                    if (this.iceReconnectTimeout) {
-                        clearTimeout(this.iceReconnectTimeout);
-                        this.iceReconnectTimeout = null;
-                    }
-                    this.updateStatus('Video chat connected!');
-                    break;
-                case 'connecting':
-                    this.updateStatus('Connecting to partner...');
-                    break;
-                case 'disconnected':
-                    this.updateStatus('Connection lost - attempting to reconnect...');
-                    break;
-                case 'failed':
-                    this.updateStatus('Connection failed');
-                    break;
-            }
-        };
-        
-        console.log('Peer connection set up complete');
+    // Close any existing peer connection first
+    if (this.peerConnection) {
+        console.log('Closing existing peer connection');
+        this.peerConnection.close();
+        this.peerConnection = null;
     }
+    
+    const configuration = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            {
+                urls: 'turn:a.relay.metered.ca:80',
+                username: 'dd386565311057dd7541e8d2',
+                credential: 'FdPalzgK8xPZhWgP'
+            },
+            {
+                urls: 'turn:a.relay.metered.ca:443',
+                username: 'dd386565311057dd7541e8d2',
+                credential: 'FdPalzgK8xPZhWgP'
+            }
+        ],
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 10,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+    };
+
+    // Create new peer connection for this specific pair
+    this.peerConnection = new RTCPeerConnection(configuration);
+    this.connectionState = 'connecting';
+
+    // Clone local stream tracks to avoid conflicts
+    if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+            console.log(`Adding ${track.kind} track to peer connection for room:`, this.currentRoom);
+            // Clone the track to avoid sharing issues
+            const clonedTrack = track.clone();
+            this.peerConnection.addTrack(clonedTrack, this.localStream);
+        });
+        
+        // Sync the current media states with the new peer connection
+        this.syncMediaStates();
+    }
+
+    // Enhanced remote stream handling
+    this.peerConnection.ontrack = (event) => {
+        console.log('Received remote stream for room:', this.currentRoom);
+        
+        // Ensure we're still in the same room
+        if (!this.currentRoom) {
+            console.log('No current room, ignoring remote stream');
+            return;
+        }
+        
+        this.remoteStream = event.streams[0];
+        this.remoteVideo.srcObject = this.remoteStream;
+        
+        // Force video to play
+        this.remoteVideo.muted = false;
+        this.remoteVideo.play().catch(e => {
+            console.log('Remote video autoplay prevented:', e);
+        });
+        
+        this.remoteVideo.onloadedmetadata = () => {
+            console.log('Remote video loaded for room:', this.currentRoom);
+            console.log('Remote video dimensions:', this.remoteVideo.videoWidth, 'x', this.remoteVideo.videoHeight);
+        };
+        
+        this.connectionState = 'connected';
+        this.updateStatus('Video chat connected and playing!');
+    };
+
+    // ICE candidate handling with room validation
+    this.peerConnection.onicecandidate = (event) => {
+        if (event.candidate && this.currentRoom) {
+            console.log(`Sending ICE candidate for room ${this.currentRoom}:`, event.candidate.type);
+            this.socket.emit('ice-candidate', {
+                roomId: this.currentRoom,
+                candidate: event.candidate
+            });
+        } else if (!event.candidate) {
+            console.log('ICE candidate gathering complete for room:', this.currentRoom);
+        }
+    };
+
+    // Enhanced connection state monitoring
+    this.peerConnection.onconnectionstatechange = () => {
+        const state = this.peerConnection.connectionState;
+        console.log(`Connection state changed to ${state} for room:`, this.currentRoom);
+        
+        switch (state) {
+            case 'connected':
+                this.connectionState = 'connected';
+                this.updateStatus('Video chat connected!');
+                break;
+            case 'disconnected':
+                this.connectionState = 'disconnected';
+                this.updateStatus('Connection lost');
+                break;
+            case 'failed':
+                this.connectionState = 'failed';
+                this.updateStatus('Connection failed');
+                this.handleConnectionFailure();
+                break;
+            case 'closed':
+                this.connectionState = 'closed';
+                break;
+        }
+    };
+    
+    console.log('Peer connection setup complete for room:', this.currentRoom);
+}
+
+    syncMediaStates() {
+        if (this.peerConnection && this.localStream) {
+            const senders = this.peerConnection.getSenders();
+            
+            // Sync video state
+            const videoSender = senders.find(sender => sender.track && sender.track.kind === 'video');
+            if (videoSender && videoSender.track) {
+                videoSender.track.enabled = this.isVideoEnabled;
+            }
+            
+            // Sync audio state
+            const audioSender = senders.find(sender => sender.track && sender.track.kind === 'audio');
+            if (audioSender && audioSender.track) {
+                audioSender.track.enabled = this.isAudioEnabled;
+            }
+            
+            console.log('Media states synced - Video:', this.isVideoEnabled, 'Audio:', this.isAudioEnabled);
+        }
+    }
+
+    debugMediaStates() {
+        console.log('=== MEDIA STATE DEBUG ===');
+        console.log('Local stream video tracks:', this.localStream?.getVideoTracks().map(t => ({
+            enabled: t.enabled,
+            readyState: t.readyState,
+            muted: t.muted
+        })));
+        console.log('Local stream audio tracks:', this.localStream?.getAudioTracks().map(t => ({
+            enabled: t.enabled,
+            readyState: t.readyState,
+            muted: t.muted
+        })));
+        
+        if (this.peerConnection) {
+            const senders = this.peerConnection.getSenders();
+            console.log('Peer connection senders:', senders.map(sender => ({
+                trackKind: sender.track?.kind,
+                trackEnabled: sender.track?.enabled,
+                trackReadyState: sender.track?.readyState
+            })));
+        }
+        
+        console.log('Class state - Video enabled:', this.isVideoEnabled, 'Audio enabled:', this.isAudioEnabled);
+        console.log('========================');
+    }
+
 
     debugVideoStatus() {
         console.log('=== VIDEO DEBUG INFO ===');
@@ -601,10 +639,30 @@ async checkMediaTransmission() {
                 videoTrack.enabled = !videoTrack.enabled;
                 this.isVideoEnabled = videoTrack.enabled;
                 
+                // Update all video tracks (original and cloned ones in peer connection)
+                if (this.peerConnection) {
+                    const senders = this.peerConnection.getSenders();
+                    senders.forEach(sender => {
+                        if (sender.track && sender.track.kind === 'video') {
+                            sender.track.enabled = this.isVideoEnabled;
+                        }
+                    });
+                }
+                
                 this.toggleVideoBtn.classList.toggle('video-off', !this.isVideoEnabled);
                 this.updateStatus(this.isVideoEnabled ? 'Video enabled' : 'Video disabled');
                 
+                // Notify partner about video toggle
+                if (this.currentRoom) {
+                    this.socket.emit('media-toggle', {
+                        roomId: this.currentRoom,
+                        type: 'video',
+                        enabled: this.isVideoEnabled
+                    });
+                }
+                
                 console.log('Video toggled:', this.isVideoEnabled);
+                this.debugMediaStates(); // Debug the media state
             }
         }
     }
@@ -616,10 +674,54 @@ async checkMediaTransmission() {
                 audioTrack.enabled = !audioTrack.enabled;
                 this.isAudioEnabled = audioTrack.enabled;
                 
+                // Update all audio tracks (original and cloned ones in peer connection)
+                if (this.peerConnection) {
+                    const senders = this.peerConnection.getSenders();
+                    senders.forEach(sender => {
+                        if (sender.track && sender.track.kind === 'audio') {
+                            sender.track.enabled = this.isAudioEnabled;
+                        }
+                    });
+                }
+                
                 this.toggleAudioBtn.classList.toggle('audio-off', !this.isAudioEnabled);
                 this.updateStatus(this.isAudioEnabled ? 'Audio enabled' : 'Audio muted');
                 
+                // Notify partner about audio toggle
+                if (this.currentRoom) {
+                    this.socket.emit('media-toggle', {
+                        roomId: this.currentRoom,
+                        type: 'audio',
+                        enabled: this.isAudioEnabled
+                    });
+                }
+                
                 console.log('Audio toggled:', this.isAudioEnabled);
+                this.debugMediaStates(); // Debug the media state
+            }
+        }
+    }
+
+    handlePartnerMediaToggle(data) {
+        console.log('Handling partner media toggle:', data);
+        
+        if (data.type === 'video') {
+            // Update UI to show partner's video status
+            if (data.enabled) {
+                this.updateStatus('Partner enabled video');
+                this.partnerVideoStatus.classList.add('hidden');
+            } else {
+                this.updateStatus('Partner disabled video');
+                this.partnerVideoStatus.classList.remove('hidden');
+            }
+        } else if (data.type === 'audio') {
+            // Update UI to show partner's audio status
+            if (data.enabled) {
+                this.updateStatus('Partner unmuted');
+                this.partnerAudioStatus.classList.add('hidden');
+            } else {
+                this.updateStatus('Partner muted');
+                this.partnerAudioStatus.classList.remove('hidden');
             }
         }
     }
@@ -652,38 +754,54 @@ async checkMediaTransmission() {
         this.updateStatus('Ready to connect');
     }
 
-    resetChat() {
-        console.log('Resetting chat...');
-        
-        if (this.iceReconnectTimeout) {
-            clearTimeout(this.iceReconnectTimeout);
-            this.iceReconnectTimeout = null;
-        }
-        
-        if (this.peerConnection) {
-            this.peerConnection.close();
-            this.peerConnection = null;
-        }
-        
-        if (this.remoteStream) {
-            this.remoteStream.getTracks().forEach(track => track.stop());
-            this.remoteStream = null;
-        }
-        
-        this.remoteVideo.srcObject = null;
-        this.currentRoom = null;
-        this.clearMessages();
-        this.closeChatPanel();
-        
-        this.toggleVideoBtn.classList.remove('video-off');
-        this.toggleAudioBtn.classList.remove('audio-off');
-        
-        if (this.localStream) {
-            this.setupPeerConnection();
-        }
-        
-        this.socket.emit('leave-room');
+resetChat() {
+    console.log('Resetting chat for room:', this.currentRoom);
+    
+    this.connectionState = 'resetting';
+    
+    // Close peer connection properly
+    if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
     }
+    
+    // Clean up remote stream
+    if (this.remoteStream) {
+        this.remoteStream.getTracks().forEach(track => track.stop());
+        this.remoteStream = null;
+    }
+    
+    // Clear remote video
+    this.remoteVideo.srcObject = null;
+    
+    // Reset room and state
+    const oldRoom = this.currentRoom;
+    this.currentRoom = null;
+    this.connectionState = 'idle';
+    
+    // Clear chat
+    this.clearMessages();
+    this.closeChatPanel();
+    
+    // Reset button states
+    this.toggleVideoBtn.classList.remove('video-off');
+    this.toggleAudioBtn.classList.remove('audio-off');
+    
+    // Reset partner status indicators
+    if (this.partnerVideoStatus) this.partnerVideoStatus.classList.add('hidden');
+    if (this.partnerAudioStatus) this.partnerAudioStatus.classList.add('hidden');
+    
+    // Set up new peer connection if local stream exists
+    if (this.localStream && this.currentRoom) {
+        this.setupPeerConnection();
+    }
+    
+    // Emit leave room for the old room
+    this.socket.emit('leave-room', { roomId: oldRoom });
+    
+    console.log('Chat reset complete');
+}
+
 
     cleanup() {
         console.log('Cleaning up...');

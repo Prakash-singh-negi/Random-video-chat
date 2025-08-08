@@ -53,21 +53,47 @@ io.on('connection', (socket) => {
     });
 
     // Handle WebRTC signaling
-    socket.on('offer', (data) => {
+// Add room validation to prevent cross-room signaling
+socket.on('offer', (data) => {
+    if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
         socket.to(data.roomId).emit('offer', data);
-    });
+        console.log(`Offer sent in room ${data.roomId}`);
+    } else {
+        console.log(`Invalid offer for room ${data.roomId} from ${socket.id}`);
+    }
+});
 
-    socket.on('answer', (data) => {
+socket.on('answer', (data) => {
+    if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
         socket.to(data.roomId).emit('answer', data);
-    });
+        console.log(`Answer sent in room ${data.roomId}`);
+    } else {
+        console.log(`Invalid answer for room ${data.roomId} from ${socket.id}`);
+    }
+});
 
-    socket.on('ice-candidate', (data) => {
+socket.on('ice-candidate', (data) => {
+    if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
         socket.to(data.roomId).emit('ice-candidate', data);
-    });
+    } else {
+        console.log(`Invalid ICE candidate for room ${data.roomId} from ${socket.id}`);
+    }
+});
+
 
     // Handle chat messages
     socket.on('chat-message', (data) => {
         socket.to(data.roomId).emit('chat-message', data);
+    });
+
+    // Handle media toggle events
+    socket.on('media-toggle', (data) => {
+        if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
+            socket.to(data.roomId).emit('media-toggle', data);
+            console.log(`Media toggle sent in room ${data.roomId}: ${data.type} ${data.enabled ? 'enabled' : 'disabled'}`);
+        } else {
+            console.log(`Invalid media toggle for room ${data.roomId} from ${socket.id}`);
+        }
     });
 
     // Handle user leaving/disconnecting
