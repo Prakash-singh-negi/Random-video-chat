@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Chat Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        button { margin: 5px; padding: 10px; }
+        video { width: 300px; height: 225px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Video Chat Connection Test</h1>
+    
+    <div class="test-section">
+        <h3>1. Socket.io Connection Test</h3>
+        <button onclick="testSocketConnection()">Test Socket.io</button>
+        <div id="socket-status">Not tested</div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. WebRTC Support Test</h3>
+        <button onclick="testWebRTC()">Test WebRTC</button>
+        <div id="webrtc-status">Not tested</div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Media Devices Test</h3>
+        <button onclick="testMediaDevices()">Test Camera/Microphone</button>
+        <div id="media-status">Not tested</div>
+        <video id="test-video" autoplay muted></video>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Peer Connection Test</h3>
+        <button onclick="testPeerConnection()">Test Peer Connection</button>
+        <div id="peer-status">Not tested</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        function testSocketConnection() {
+            const statusDiv = document.getElementById('socket-status');
+            statusDiv.innerHTML = 'Testing...';
+            
+            try {
+                const socket = io();
+                
+                socket.on('connect', () => {
+                    statusDiv.innerHTML = '<span class="success">✓ Socket.io connected successfully!</span>';
+                    console.log('Socket connected:', socket.id);
+                });
+                
+                socket.on('connect_error', (error) => {
+                    statusDiv.innerHTML = '<span class="error">✗ Socket.io connection failed: ' + error.message + '</span>';
+                    console.error('Socket connection error:', error);
+                });
+                
+                setTimeout(() => {
+                    if (socket.connected) {
+                        socket.disconnect();
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="error">✗ Socket.io not available: ' + error.message + '</span>';
+            }
+        }
+        
+        function testWebRTC() {
+            const statusDiv = document.getElementById('webrtc-status');
+            
+            if (typeof RTCPeerConnection !== 'undefined') {
+                statusDiv.innerHTML = '<span class="success">✓ WebRTC is supported</span>';
+                console.log('WebRTC supported');
+            } else {
+                statusDiv.innerHTML = '<span class="error">✗ WebRTC is not supported</span>';
+                console.error('WebRTC not supported');
+            }
+        }
+        
+        async function testMediaDevices() {
+            const statusDiv = document.getElementById('media-status');
+            const video = document.getElementById('test-video');
+            
+            statusDiv.innerHTML = 'Testing...';
+            
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia not supported');
+                }
+                
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                video.srcObject = stream;
+                statusDiv.innerHTML = '<span class="success">✓ Camera and microphone access granted</span>';
+                console.log('Media devices working');
+                
+                // Stop the stream after 5 seconds
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }, 5000);
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="error">✗ Media access failed: ' + error.message + '</span>';
+                console.error('Media access error:', error);
+            }
+        }
+        
+        function testPeerConnection() {
+            const statusDiv = document.getElementById('peer-status');
+            
+            try {
+                const pc = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                });
+                
+                statusDiv.innerHTML = '<span class="success">✓ Peer connection created successfully</span>';
+                console.log('Peer connection test successful');
+                
+                pc.close();
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="error">✗ Peer connection failed: ' + error.message + '</span>';
+                console.error('Peer connection error:', error);
+            }
+        }
+        
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            setTimeout(testWebRTC, 1000);
+        });
+    </script>
+</body>
+</html>

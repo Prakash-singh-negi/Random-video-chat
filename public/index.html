@@ -16,14 +16,234 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Profile Setup Screen -->
+            <div id="profile-screen" class="screen active">
+                <div class="profile-card">
+                    <h2>Welcome! Let's Get Started</h2>
+                    <p>Please provide some information to personalize your experience</p>
+                    
+                    <form id="profile-form" class="profile-form">
+                        <div class="form-group">
+                            <label for="user-name">Your Name:</label>
+                            <input type="text" id="user-name" name="name" required placeholder="Enter your name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="user-gender">Gender:</label>
+                            <select id="user-gender" name="gender" required>
+                                <option value="">Select gender</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="other">Other</option>
+                                <option value="prefer-not-to-say">Prefer not to say</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="gender-preference">Preferred Gender to Match With:</label>
+                            <select id="gender-preference" name="genderPreference" required>
+                                <option value="">Select preference</option>
+                                <option value="any">Any Gender</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <small>💡 We'll try to match you with your preferred gender when possible</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="user-country">Your Country:</label>
+                            <select id="user-country" name="country" required>
+                                <option value="">Select your country</option>
+                                <option value="us">United States</option>
+                                <option value="gb">United Kingdom</option>
+                                <option value="ca">Canada</option>
+                                <option value="au">Australia</option>
+                                <option value="de">Germany</option>
+                                <option value="fr">France</option>
+                                <option value="in">India</option>
+                                <option value="jp">Japan</option>
+                                <option value="br">Brazil</option>
+                                <option value="mx">Mexico</option>
+                                <option value="ru">Russia</option>
+                                <option value="cn">China</option>
+                                <option value="kr">South Korea</option>
+                                <option value="it">Italy</option>
+                                <option value="es">Spain</option>
+                                <option value="nl">Netherlands</option>
+                                <option value="se">Sweden</option>
+                                <option value="no">Norway</option>
+                                <option value="dk">Denmark</option>
+                                <option value="fi">Finland</option>
+                                <option value="ch">Switzerland</option>
+                                <option value="at">Austria</option>
+                                <option value="be">Belgium</option>
+                                <option value="pt">Portugal</option>
+                                <option value="gr">Greece</option>
+                                <option value="pl">Poland</option>
+                                <option value="cz">Czech Republic</option>
+                                <option value="hu">Hungary</option>
+                                <option value="ro">Romania</option>
+                                <option value="bg">Bulgaria</option>
+                                <option value="hr">Croatia</option>
+                                <option value="si">Slovenia</option>
+                                <option value="sk">Slovakia</option>
+                                <option value="ee">Estonia</option>
+                                <option value="lv">Latvia</option>
+                                <option value="lt">Lithuania</option>
+                                <option value="ie">Ireland</option>
+                                <option value="is">Iceland</option>
+                                <option value="mt">Malta</option>
+                                <option value="cy">Cyprus</option>
+                                <option value="lu">Luxembourg</option>
+                                <option value="mc">Monaco</option>
+                                <option value="li">Liechtenstein</option>
+                                <option value="sm">San Marino</option>
+                                <option value="va">Vatican City</option>
+                                <option value="ad">Andorra</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <div id="country-detected" class="country-detected" style="display: none;">
+                                <small>🌍 Country detected from your IP: <span id="detected-country">Unknown</span></small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="preferred-countries">Preferred Countries to Match With:</label>
+                            <select id="preferred-countries" name="preferredCountries" multiple>
+                                <option value="any">Any Country</option>
+                                <option value="us">United States</option>
+                                <option value="gb">United Kingdom</option>
+                                <option value="ca">Canada</option>
+                                <option value="au">Australia</option>
+                                <option value="de">Germany</option>
+                                <option value="fr">France</option>
+                                <option value="in">India</option>
+                                <option value="jp">Japan</option>
+                                <option value="br">Brazil</option>
+                                <option value="mx">Mexico</option>
+                                <option value="ru">Russia</option>
+                                <option value="cn">China</option>
+                                <option value="kr">South Korea</option>
+                                <option value="it">Italy</option>
+                                <option value="es">Spain</option>
+                                <option value="nl">Netherlands</option>
+                                <option value="se">Sweden</option>
+                                <option value="no">Norway</option>
+                                <option value="dk">Denmark</option>
+                                <option value="fi">Finland</option>
+                                <option value="ch">Switzerland</option>
+                                <option value="at">Austria</option>
+                                <option value="be">Belgium</option>
+                                <option value="pt">Portugal</option>
+                                <option value="gr">Greece</option>
+                                <option value="pl">Poland</option>
+                                <option value="cz">Czech Republic</option>
+                                <option value="hu">Hungary</option>
+                                <option value="ro">Romania</option>
+                                <option value="bg">Bulgaria</option>
+                                <option value="hr">Croatia</option>
+                                <option value="si">Slovenia</option>
+                                <option value="sk">Slovakia</option>
+                                <option value="ee">Estonia</option>
+                                <option value="lv">Latvia</option>
+                                <option value="lt">Lithuania</option>
+                                <option value="ie">Ireland</option>
+                                <option value="is">Iceland</option>
+                                <option value="mt">Malta</option>
+                                <option value="cy">Cyprus</option>
+                                <option value="lu">Luxembourg</option>
+                                <option value="mc">Monaco</option>
+                                <option value="li">Liechtenstein</option>
+                                <option value="sm">San Marino</option>
+                                <option value="va">Vatican City</option>
+                                <option value="ad">Andorra</option>
+                            </select>
+                            <small>Hold Ctrl/Cmd to select multiple countries</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="ip-permission" name="ipPermission" required>
+                                <span class="checkmark"></span>
+                                I agree to share my IP address for country-based matching
+                            </label>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <span>Continue to Chat</span>
+                            <div class="btn-shine"></div>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
             <!-- Start Screen -->
-            <div id="start-screen" class="screen active">
+            <div id="start-screen" class="screen">
                 <div class="welcome-card">
-                    <h2>Welcome to Random Video Chat</h2>
+                    <h2>Welcome, <span id="user-display-name">User</span>!</h2>
                     <p>Click the button below to start chatting with a random person</p>
+                    
+                    <div class="country-filter">
+                        <label for="country-filter">Filter by Country:</label>
+                        <select id="country-filter">
+                            <option value="any">Any Country</option>
+                            <option value="us">United States</option>
+                            <option value="gb">United Kingdom</option>
+                            <option value="ca">Canada</option>
+                            <option value="au">Australia</option>
+                            <option value="de">Germany</option>
+                            <option value="fr">France</option>
+                            <option value="in">India</option>
+                            <option value="jp">Japan</option>
+                            <option value="br">Brazil</option>
+                            <option value="mx">Mexico</option>
+                            <option value="ru">Russia</option>
+                            <option value="cn">China</option>
+                            <option value="kr">South Korea</option>
+                            <option value="it">Italy</option>
+                            <option value="es">Spain</option>
+                            <option value="nl">Netherlands</option>
+                            <option value="se">Sweden</option>
+                            <option value="no">Norway</option>
+                            <option value="dk">Denmark</option>
+                            <option value="fi">Finland</option>
+                            <option value="ch">Switzerland</option>
+                            <option value="at">Austria</option>
+                            <option value="be">Belgium</option>
+                            <option value="pt">Portugal</option>
+                            <option value="gr">Greece</option>
+                            <option value="pl">Poland</option>
+                            <option value="cz">Czech Republic</option>
+                            <option value="hu">Hungary</option>
+                            <option value="ro">Romania</option>
+                            <option value="bg">Bulgaria</option>
+                            <option value="hr">Croatia</option>
+                            <option value="si">Slovenia</option>
+                            <option value="sk">Slovakia</option>
+                            <option value="ee">Estonia</option>
+                            <option value="lv">Latvia</option>
+                            <option value="lt">Lithuania</option>
+                            <option value="ie">Ireland</option>
+                            <option value="is">Iceland</option>
+                            <option value="mt">Malta</option>
+                            <option value="cy">Cyprus</option>
+                            <option value="lu">Luxembourg</option>
+                            <option value="mc">Monaco</option>
+                            <option value="li">Liechtenstein</option>
+                            <option value="sm">San Marino</option>
+                            <option value="va">Vatican City</option>
+                            <option value="ad">Andorra</option>
+                        </select>
+                    </div>
+                    
                     <button id="start-chat-btn" class="btn btn-primary">
                         <span>Start Video Chat</span>
                         <div class="btn-shine"></div>
+                    </button>
+                    
+                    <button id="edit-profile-btn" class="btn btn-secondary">
+                        Edit Profile
                     </button>
                 </div>
             </div>
@@ -35,6 +255,7 @@
                     <h2>Looking for someone to chat with...</h2>
                     <p>Please wait while we find you a chat partner</p>
                     <button id="cancel-waiting-btn" class="btn btn-secondary">Cancel</button>
+                    <button id="test-match-btn" class="btn btn-primary" style="margin-top: 10px; background-color: #ff6b6b;">Test Match (Debug)</button>
                 </div>
             </div>
 
@@ -50,6 +271,11 @@
                             </div>
                             <div id="partner-audio-status" class="partner-status audio-status hidden">
                                 <span>Muted</span>
+                            </div>
+                            <!-- Looking for partner overlay -->
+                            <div id="looking-for-partner" class="looking-for-partner hidden">
+                                <div class="looking-spinner"></div>
+                                <p>Looking for a new partner...</p>
                             </div>
                         </div>
                         <div class="video-box local">
@@ -114,6 +340,29 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Test Socket.io connection
+        if (typeof io === 'undefined') {
+            console.error('Socket.io not loaded from CDN, trying fallback...');
+            // Fallback to CDN
+            const script = document.createElement('script');
+            script.src = 'https://cdn.socket.io/4.8.1/socket.io.min.js';
+            script.onload = function() {
+                console.log('Socket.io loaded from CDN');
+                // Initialize the app after Socket.io loads
+                if (window.initVideoChat) {
+                    window.initVideoChat();
+                }
+            };
+            script.onerror = function() {
+                console.error('Failed to load Socket.io from CDN');
+                alert('Failed to load Socket.io library. Please check your internet connection.');
+            };
+            document.head.appendChild(script);
+        } else {
+            console.log('Socket.io loaded successfully');
+        }
+    </script>
     <script src="script.js"></script>
 </body>
 </html>

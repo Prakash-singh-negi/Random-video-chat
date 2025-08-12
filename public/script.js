@@ -10,18 +10,39 @@ class VideoChat {
         this.isVideoEnabled = true;
         this.isAudioEnabled = true;
         
+        // User profile data
+        this.userProfile = null;
+        this.userIP = null;
+        this.userCountry = null;
+        
         this.initializeElements();
         this.setupEventListeners();
         this.setupSocketListeners();
+        this.loadUserProfile();
         
         console.log('VideoChat initialized');
     }
 
     initializeElements() {
         // Screens
+        this.profileScreen = document.getElementById('profile-screen');
         this.startScreen = document.getElementById('start-screen');
         this.waitingScreen = document.getElementById('waiting-screen');
         this.chatScreen = document.getElementById('chat-screen');
+        
+        // Profile form elements
+        this.profileForm = document.getElementById('profile-form');
+        this.userNameInput = document.getElementById('user-name');
+        this.userGenderInput = document.getElementById('user-gender');
+        this.genderPreferenceInput = document.getElementById('gender-preference');
+        this.userCountryInput = document.getElementById('user-country');
+        this.preferredCountriesInput = document.getElementById('preferred-countries');
+        this.ipPermissionInput = document.getElementById('ip-permission');
+        
+        // Start screen elements
+        this.userDisplayName = document.getElementById('user-display-name');
+        this.countryFilter = document.getElementById('country-filter');
+        this.editProfileBtn = document.getElementById('edit-profile-btn');
         
         // Videos
         this.localVideo = document.getElementById('local-video');
@@ -50,6 +71,9 @@ class VideoChat {
         this.partnerVideoStatus = document.getElementById('partner-video-status');
         this.partnerAudioStatus = document.getElementById('partner-audio-status');
         
+        // Looking for partner overlay
+        this.lookingForPartner = document.getElementById('looking-for-partner');
+        
         // Debug button
         this.debugMediaBtn = document.getElementById('debug-media-btn');
         
@@ -57,6 +81,22 @@ class VideoChat {
     }
 
     setupEventListeners() {
+        // Profile form submission
+        this.profileForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveUserProfile();
+        });
+        
+        // Edit profile button
+        this.editProfileBtn.addEventListener('click', () => {
+            this.showProfileScreen();
+        });
+        
+        // Country filter change
+        this.countryFilter.addEventListener('change', () => {
+            this.updateCountryFilter();
+        });
+        
         this.startChatBtn.addEventListener('click', () => {
             console.log('Start chat clicked');
             this.startVideoChat();
@@ -139,6 +179,12 @@ this.socket.on('match-found', async (data) => {
 
     this.currentRoom = data.roomId;
     this.connectionState = 'matched';
+    
+    // Hide "Looking for partner" overlay
+    if (this.lookingForPartner) {
+        this.lookingForPartner.classList.add('hidden');
+    }
+    
     this.showScreen('chat');
     this.updateStatus('Connected! Setting up video...');
 
@@ -249,8 +295,19 @@ this.socket.on('match-found', async (data) => {
             
             await this.setupPeerConnection();
             
-            console.log('Emitting find-match');
-            this.socket.emit('find-match', { timestamp: Date.now() });
+            // Prepare user data for matching
+            const userData = {
+                timestamp: Date.now(),
+                profile: this.userProfile,
+                country: this.userCountry || this.userProfile?.country,
+                gender: this.userProfile?.gender,
+                genderPreference: this.userProfile?.genderPreference,
+                preferredCountries: this.userProfile?.preferredCountries || ['any'],
+                countryFilter: this.userProfile?.countryFilter || 'any'
+            };
+            
+            console.log('Emitting find-match with user data:', userData);
+            this.socket.emit('find-match', userData);
             
         } catch (error) {
             console.error('Error accessing media devices:', error);
@@ -285,15 +342,24 @@ async setupPeerConnection() {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            // Free TURN servers (you may need to get your own)
             {
-                urls: 'turn:a.relay.metered.ca:80',
-                username: 'dd386565311057dd7541e8d2',
-                credential: 'FdPalzgK8xPZhWgP'
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
             },
             {
-                urls: 'turn:a.relay.metered.ca:443',
-                username: 'dd386565311057dd7541e8d2',
-                credential: 'FdPalzgK8xPZhWgP'
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
             }
         ],
         iceTransportPolicy: 'all',
@@ -306,13 +372,11 @@ async setupPeerConnection() {
     this.peerConnection = new RTCPeerConnection(configuration);
     this.connectionState = 'connecting';
 
-    // Clone local stream tracks to avoid conflicts
+    // Add local stream tracks to peer connection
     if (this.localStream) {
         this.localStream.getTracks().forEach(track => {
             console.log(`Adding ${track.kind} track to peer connection for room:`, this.currentRoom);
-            // Clone the track to avoid sharing issues
-            const clonedTrack = track.clone();
-            this.peerConnection.addTrack(clonedTrack, this.localStream);
+            this.peerConnection.addTrack(track, this.localStream);
         });
         
         // Sync the current media states with the new peer connection
@@ -331,6 +395,11 @@ async setupPeerConnection() {
         
         this.remoteStream = event.streams[0];
         this.remoteVideo.srcObject = this.remoteStream;
+        
+        // Hide "Looking for partner" overlay when remote video starts
+        if (this.lookingForPartner) {
+            this.lookingForPartner.classList.add('hidden');
+        }
         
         // Force video to play
         this.remoteVideo.muted = false;
@@ -382,6 +451,17 @@ async setupPeerConnection() {
             case 'closed':
                 this.connectionState = 'closed';
                 break;
+        }
+    };
+
+    // Add ICE connection state monitoring
+    this.peerConnection.oniceconnectionstatechange = () => {
+        const iceState = this.peerConnection.iceConnectionState;
+        console.log(`ICE connection state: ${iceState} for room:`, this.currentRoom);
+        
+        if (iceState === 'failed') {
+            console.log('ICE connection failed, attempting restart...');
+            this.handleIceFailure();
         }
     };
     
@@ -639,7 +719,7 @@ async checkMediaTransmission() {
                 videoTrack.enabled = !videoTrack.enabled;
                 this.isVideoEnabled = videoTrack.enabled;
                 
-                // Update all video tracks (original and cloned ones in peer connection)
+                // Update video track in peer connection
                 if (this.peerConnection) {
                     const senders = this.peerConnection.getSenders();
                     senders.forEach(sender => {
@@ -674,7 +754,7 @@ async checkMediaTransmission() {
                 audioTrack.enabled = !audioTrack.enabled;
                 this.isAudioEnabled = audioTrack.enabled;
                 
-                // Update all audio tracks (original and cloned ones in peer connection)
+                // Update audio track in peer connection
                 if (this.peerConnection) {
                     const senders = this.peerConnection.getSenders();
                     senders.forEach(sender => {
@@ -729,16 +809,38 @@ async checkMediaTransmission() {
     nextChat() {
         console.log('Looking for next chat partner...');
         this.updateStatus('Looking for a new partner...');
-        this.resetChat();
+        
+        // Reset chat but keep local stream and stay on chat screen
+        this.resetChatForNextPartner();
+        
+        // Stay on chat screen but show "looking for partner" status
+        // Don't change screens - keep user on video chat screen like Omegle
+        
+        // Prepare user data for matching
+        const userData = {
+            timestamp: Date.now(),
+            profile: this.userProfile,
+            country: this.userCountry || this.userProfile?.country,
+            gender: this.userProfile?.gender,
+            genderPreference: this.userProfile?.genderPreference,
+            preferredCountries: this.userProfile?.preferredCountries || ['any'],
+            countryFilter: this.userProfile?.countryFilter || 'any'
+        };
         
         setTimeout(() => {
-            this.socket.emit('find-match', { timestamp: Date.now() });
+            this.socket.emit('find-match', userData);
         }, 500);
     }
 
     endChat() {
         console.log('Ending chat...');
         this.updateStatus('Chat ended');
+        
+        // Hide "Looking for partner" overlay if it's showing
+        if (this.lookingForPartner) {
+            this.lookingForPartner.classList.add('hidden');
+        }
+        
         this.resetToStart();
     }
 
@@ -754,53 +856,104 @@ async checkMediaTransmission() {
         this.updateStatus('Ready to connect');
     }
 
-resetChat() {
-    console.log('Resetting chat for room:', this.currentRoom);
-    
-    this.connectionState = 'resetting';
-    
-    // Close peer connection properly
-    if (this.peerConnection) {
-        this.peerConnection.close();
-        this.peerConnection = null;
+    resetChat() {
+        console.log('Resetting chat for room:', this.currentRoom);
+        
+        this.connectionState = 'resetting';
+        
+        // Close peer connection properly
+        if (this.peerConnection) {
+            this.peerConnection.close();
+            this.peerConnection = null;
+        }
+        
+        // Clean up remote stream
+        if (this.remoteStream) {
+            this.remoteStream.getTracks().forEach(track => track.stop());
+            this.remoteStream = null;
+        }
+        
+        // Clear remote video
+        this.remoteVideo.srcObject = null;
+        
+        // Reset room and state
+        const oldRoom = this.currentRoom;
+        this.currentRoom = null;
+        this.connectionState = 'idle';
+        
+        // Clear chat
+        this.clearMessages();
+        this.closeChatPanel();
+        
+        // Reset button states
+        this.toggleVideoBtn.classList.remove('video-off');
+        this.toggleAudioBtn.classList.remove('audio-off');
+        
+        // Reset partner status indicators
+        if (this.partnerVideoStatus) this.partnerVideoStatus.classList.add('hidden');
+        if (this.partnerAudioStatus) this.partnerAudioStatus.classList.add('hidden');
+        
+        // Set up new peer connection if local stream exists
+        if (this.localStream && this.currentRoom) {
+            this.setupPeerConnection();
+        }
+        
+        // Emit leave room for the old room
+        this.socket.emit('leave-room', { roomId: oldRoom });
+        
+        console.log('Chat reset complete');
     }
-    
-    // Clean up remote stream
-    if (this.remoteStream) {
-        this.remoteStream.getTracks().forEach(track => track.stop());
-        this.remoteStream = null;
+
+    resetChatForNextPartner() {
+        console.log('Resetting chat for next partner...');
+        
+        this.connectionState = 'resetting';
+        
+        // Close peer connection properly
+        if (this.peerConnection) {
+            this.peerConnection.close();
+            this.peerConnection = null;
+        }
+        
+        // Clean up remote stream
+        if (this.remoteStream) {
+            this.remoteStream.getTracks().forEach(track => track.stop());
+            this.remoteStream = null;
+        }
+        
+        // Clear remote video but keep local video visible
+        this.remoteVideo.srcObject = null;
+        
+        // Reset room and state
+        const oldRoom = this.currentRoom;
+        this.currentRoom = null;
+        this.connectionState = 'idle';
+        
+        // Clear chat
+        this.clearMessages();
+        this.closeChatPanel();
+        
+        // Reset button states
+        this.toggleVideoBtn.classList.remove('video-off');
+        this.toggleAudioBtn.classList.remove('audio-off');
+        
+        // Reset partner status indicators
+        if (this.partnerVideoStatus) this.partnerVideoStatus.classList.add('hidden');
+        if (this.partnerAudioStatus) this.partnerAudioStatus.classList.add('hidden');
+        
+        // Show "Looking for partner" overlay
+        if (this.lookingForPartner) {
+            this.lookingForPartner.classList.remove('hidden');
+        }
+        
+        // Emit leave room for the old room
+        this.socket.emit('leave-room', { roomId: oldRoom });
+        
+        // Keep user on chat screen - don't change screens
+        // This mimics Omegle behavior where you stay on video screen
+        
+        console.log('Chat reset for next partner complete - staying on chat screen');
     }
-    
-    // Clear remote video
-    this.remoteVideo.srcObject = null;
-    
-    // Reset room and state
-    const oldRoom = this.currentRoom;
-    this.currentRoom = null;
-    this.connectionState = 'idle';
-    
-    // Clear chat
-    this.clearMessages();
-    this.closeChatPanel();
-    
-    // Reset button states
-    this.toggleVideoBtn.classList.remove('video-off');
-    this.toggleAudioBtn.classList.remove('audio-off');
-    
-    // Reset partner status indicators
-    if (this.partnerVideoStatus) this.partnerVideoStatus.classList.add('hidden');
-    if (this.partnerAudioStatus) this.partnerAudioStatus.classList.add('hidden');
-    
-    // Set up new peer connection if local stream exists
-    if (this.localStream && this.currentRoom) {
-        this.setupPeerConnection();
-    }
-    
-    // Emit leave room for the old room
-    this.socket.emit('leave-room', { roomId: oldRoom });
-    
-    console.log('Chat reset complete');
-}
 
 
     cleanup() {
@@ -913,11 +1066,179 @@ resetChat() {
         this.statusText.textContent = message;
         console.log('Status updated:', message);
     }
+
+    // Profile Management Methods
+    async loadUserProfile() {
+        const savedProfile = localStorage.getItem('userProfile');
+        if (savedProfile) {
+            this.userProfile = JSON.parse(savedProfile);
+            this.populateProfileForm();
+            this.showStartScreen();
+        } else {
+            this.showProfileScreen();
+        }
+    }
+
+    saveUserProfile() {
+        const formData = new FormData(this.profileForm);
+        
+        this.userProfile = {
+            name: formData.get('name'),
+            gender: formData.get('gender'),
+            genderPreference: formData.get('genderPreference'),
+            country: formData.get('country'),
+            preferredCountries: Array.from(this.preferredCountriesInput.selectedOptions).map(option => option.value),
+            ipPermission: formData.get('ipPermission') === 'on'
+        };
+        
+        // Save to localStorage
+        localStorage.setItem('userProfile', JSON.stringify(this.userProfile));
+        
+        // Update display
+        this.userDisplayName.textContent = this.userProfile.name || '';
+        
+        // Get user's IP and country if permission granted
+        if (this.userProfile.ipPermission) {
+            this.getUserIPAndCountry();
+        }
+        
+        this.showStartScreen();
+        console.log('Profile saved:', this.userProfile);
+    }
+
+    populateProfileForm() {
+        if (this.userProfile) {
+            this.userNameInput.value = this.userProfile.name || '';
+            this.userGenderInput.value = this.userProfile.gender || '';
+            this.genderPreferenceInput.value = this.userProfile.genderPreference || '';
+            this.userCountryInput.value = this.userProfile.country || '';
+            
+            // Clear previous selections
+            Array.from(this.preferredCountriesInput.options).forEach(option => {
+                option.selected = false;
+            });
+            
+            // Set preferred countries
+            if (this.userProfile.preferredCountries) {
+                this.userProfile.preferredCountries.forEach(country => {
+                    const option = this.preferredCountriesInput.querySelector(`option[value="${country}"]`);
+                    if (option) option.selected = true;
+                });
+            }
+            
+            this.ipPermissionInput.checked = this.userProfile.ipPermission || false;
+            
+            // Update display name
+            this.userDisplayName.textContent = this.userProfile.name || 'User';
+            
+            // Set country filter
+            if (this.userProfile.countryFilter) {
+                this.countryFilter.value = this.userProfile.countryFilter;
+            }
+            
+            // Show country detected if IP permission was granted
+            if (this.userProfile.ipPermission && this.userProfile.country) {
+                const countryDetected = document.getElementById('country-detected');
+                const detectedCountry = document.getElementById('detected-country');
+                if (countryDetected && detectedCountry) {
+                    countryDetected.style.display = 'block';
+                    const countryNames = {
+                        'us': 'United States', 'gb': 'United Kingdom', 'ca': 'Canada', 'au': 'Australia',
+                        'de': 'Germany', 'fr': 'France', 'in': 'India', 'jp': 'Japan', 'br': 'Brazil',
+                        'mx': 'Mexico', 'ru': 'Russia', 'cn': 'China', 'kr': 'South Korea', 'it': 'Italy',
+                        'es': 'Spain', 'nl': 'Netherlands', 'se': 'Sweden', 'no': 'Norway', 'dk': 'Denmark',
+                        'fi': 'Finland', 'ch': 'Switzerland', 'at': 'Austria', 'be': 'Belgium', 'pt': 'Portugal',
+                        'gr': 'Greece', 'pl': 'Poland', 'cz': 'Czech Republic', 'hu': 'Hungary', 'ro': 'Romania',
+                        'bg': 'Bulgaria', 'hr': 'Croatia', 'si': 'Slovenia', 'sk': 'Slovakia', 'ee': 'Estonia',
+                        'lv': 'Latvia', 'lt': 'Lithuania', 'ie': 'Ireland', 'is': 'Iceland', 'mt': 'Malta',
+                        'cy': 'Cyprus', 'lu': 'Luxembourg', 'mc': 'Monaco', 'li': 'Liechtenstein', 'sm': 'San Marino',
+                        'va': 'Vatican City', 'ad': 'Andorra'
+                    };
+                    const countryName = countryNames[this.userProfile.country] || this.userProfile.country.toUpperCase();
+                    detectedCountry.textContent = countryName;
+                }
+            }
+        }
+    }
+
+    async getUserIPAndCountry() {
+        try {
+            // Show loading state
+            const countryDetected = document.getElementById('country-detected');
+            const detectedCountry = document.getElementById('detected-country');
+            countryDetected.style.display = 'block';
+            detectedCountry.textContent = 'Detecting...';
+            
+            // Get IP address
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            this.userIP = ipData.ip;
+            
+            // Get country from IP
+            const geoResponse = await fetch(`https://ipapi.co/${this.userIP}/json/`);
+            const geoData = await geoResponse.json();
+            this.userCountry = geoData.country_code?.toLowerCase();
+            
+            console.log('User IP and country detected:', { ip: this.userIP, country: this.userCountry });
+            
+            // Update user profile with detected country if not manually set
+            if (this.userCountry && !this.userProfile.country) {
+                this.userProfile.country = this.userCountry;
+                this.userCountryInput.value = this.userCountry;
+                localStorage.setItem('userProfile', JSON.stringify(this.userProfile));
+            }
+            
+            // Update the display
+            if (this.userCountry) {
+                const countryNames = {
+                    'us': 'United States', 'gb': 'United Kingdom', 'ca': 'Canada', 'au': 'Australia',
+                    'de': 'Germany', 'fr': 'France', 'in': 'India', 'jp': 'Japan', 'br': 'Brazil',
+                    'mx': 'Mexico', 'ru': 'Russia', 'cn': 'China', 'kr': 'South Korea', 'it': 'Italy',
+                    'es': 'Spain', 'nl': 'Netherlands', 'se': 'Sweden', 'no': 'Norway', 'dk': 'Denmark',
+                    'fi': 'Finland', 'ch': 'Switzerland', 'at': 'Austria', 'be': 'Belgium', 'pt': 'Portugal',
+                    'gr': 'Greece', 'pl': 'Poland', 'cz': 'Czech Republic', 'hu': 'Hungary', 'ro': 'Romania',
+                    'bg': 'Bulgaria', 'hr': 'Croatia', 'si': 'Slovenia', 'sk': 'Slovakia', 'ee': 'Estonia',
+                    'lv': 'Latvia', 'lt': 'Lithuania', 'ie': 'Ireland', 'is': 'Iceland', 'mt': 'Malta',
+                    'cy': 'Cyprus', 'lu': 'Luxembourg', 'mc': 'Monaco', 'li': 'Liechtenstein', 'sm': 'San Marino',
+                    'va': 'Vatican City', 'ad': 'Andorra'
+                };
+                
+                const countryName = countryNames[this.userCountry] || this.userCountry.toUpperCase();
+                detectedCountry.textContent = countryName;
+            } else {
+                detectedCountry.textContent = 'Could not detect';
+            }
+            
+        } catch (error) {
+            console.error('Error getting IP/Country:', error);
+            const detectedCountry = document.getElementById('detected-country');
+            detectedCountry.textContent = 'Error detecting';
+        }
+    }
+
+    updateCountryFilter() {
+        const selectedCountry = this.countryFilter.value;
+        console.log('Country filter updated:', selectedCountry);
+        
+        // Store the preference
+        if (this.userProfile) {
+            this.userProfile.countryFilter = selectedCountry;
+            localStorage.setItem('userProfile', JSON.stringify(this.userProfile));
+        }
+    }
+
+    showProfileScreen() {
+        this.showScreen('profile');
+    }
+
+    showStartScreen() {
+        this.showScreen('start');
+    }
 }
 
 // Initialize the app when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, initializing VideoChat...');
+function initVideoChat() {
+    console.log('Initializing VideoChat...');
     
     if (!window.RTCPeerConnection) {
         alert('Your browser does not support WebRTC. Please use a modern browser like Chrome, Firefox, or Safari.');
@@ -938,6 +1259,19 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Error initializing VideoChat:', error);
         alert('Error starting the application. Please refresh the page.');
     }
+}
+
+// Make initVideoChat available globally for fallback
+window.initVideoChat = initVideoChat;
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, checking Socket.io availability...');
+    
+    // If Socket.io is already loaded, initialize immediately
+    if (typeof io !== 'undefined') {
+        initVideoChat();
+    }
+    // Otherwise, the fallback script will call initVideoChat when it loads
 });
 
 // Handle page unload

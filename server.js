@@ -15,71 +15,183 @@ const io = socketIo(server, {
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Store waiting users and active rooms
+// Store waiting users and active rooms with enhanced user data
 let waitingUsers = [];
 let activeRooms = new Map();
+
+// Gender and country matching utility functions
+function canMatchUsers(user1, user2) {
+    // Check gender compatibility first
+    const user1Gender = user1.gender || user1.profile?.gender;
+    const user2Gender = user2.gender || user2.profile?.gender;
+    const user1GenderPref = user1.genderPreference || user1.profile?.genderPreference;
+    const user2GenderPref = user2.genderPreference || user2.profile?.genderPreference;
+    
+    // Check if gender preferences are compatible
+    const user1MatchesUser2Gender = user2GenderPref === 'any' || 
+        user2GenderPref === user1Gender || 
+        (user2GenderPref === 'other' && user1Gender === 'other');
+    
+    const user2MatchesUser1Gender = user1GenderPref === 'any' || 
+        user1GenderPref === user2Gender || 
+        (user1GenderPref === 'other' && user2Gender === 'other');
+    
+    if (!user1MatchesUser2Gender || !user2MatchesUser1Gender) {
+        return false;
+    }
+    
+    // If either user has no country filter, they can match with anyone
+    if (!user1.countryFilter || user1.countryFilter === 'any' || 
+        !user2.countryFilter || user2.countryFilter === 'any') {
+        return true;
+    }
+    
+    // Check if users' countries match their respective filters
+    const user1Country = user1.country || user1.profile?.country;
+    const user2Country = user2.country || user2.profile?.country;
+    
+    // If we have country information, check compatibility
+    if (user1Country && user2Country) {
+        // Check if user1's country matches user2's filter
+        const user1MatchesUser2Filter = user2.countryFilter === 'any' || 
+            user2.countryFilter === user1Country ||
+            (user2.preferredCountries && user2.preferredCountries.includes(user1Country));
+        
+        // Check if user2's country matches user1's filter
+        const user2MatchesUser1Filter = user1.countryFilter === 'any' || 
+            user1.countryFilter === user2Country ||
+            (user1.preferredCountries && user1.preferredCountries.includes(user2Country));
+        
+        return user1MatchesUser2Filter && user2MatchesUser1Filter;
+    }
+    
+    // If no country information, allow matching
+    return true;
+}
+
+function findBestMatch(newUser) {
+    // First, try to find an exact gender AND country match
+    for (let i = 0; i < waitingUsers.length; i++) {
+        const waitingUser = waitingUsers[i];
+        if (canMatchUsers(newUser, waitingUser)) {
+            const newUserGender = newUser.gender || newUser.profile?.gender;
+            const waitingUserGender = waitingUser.gender || waitingUser.profile?.gender;
+            const newUserCountry = newUser.country || newUser.profile?.country;
+            const waitingUserCountry = waitingUser.country || waitingUser.profile?.country;
+            
+            if (newUserGender && waitingUserGender && newUserGender === waitingUserGender &&
+                newUserCountry && waitingUserCountry && newUserCountry === waitingUserCountry) {
+                return { index: i, user: waitingUser, priority: 'exact' };
+            }
+        }
+    }
+    
+    // Second, try to find an exact gender match
+    for (let i = 0; i < waitingUsers.length; i++) {
+        const waitingUser = waitingUsers[i];
+        if (canMatchUsers(newUser, waitingUser)) {
+            const newUserGender = newUser.gender || newUser.profile?.gender;
+            const waitingUserGender = waitingUser.gender || waitingUser.profile?.gender;
+            
+            if (newUserGender && waitingUserGender && newUserGender === waitingUserGender) {
+                return { index: i, user: waitingUser, priority: 'gender' };
+            }
+        }
+    }
+    
+    // Third, try to find an exact country match
+    for (let i = 0; i < waitingUsers.length; i++) {
+        const waitingUser = waitingUsers[i];
+        if (canMatchUsers(newUser, waitingUser)) {
+            const newUserCountry = newUser.country || newUser.profile?.country;
+            const waitingUserCountry = waitingUser.country || waitingUser.profile?.country;
+            
+            if (newUserCountry && waitingUserCountry && newUserCountry === waitingUserCountry) {
+                return { index: i, user: waitingUser, priority: 'country' };
+            }
+        }
+    }
+    
+    // Finally, try to find any compatible match
+    for (let i = 0; i < waitingUsers.length; i++) {
+        const waitingUser = waitingUsers[i];
+        if (canMatchUsers(newUser, waitingUser)) {
+            return { index: i, user: waitingUser, priority: 'compatible' };
+        }
+    }
+    
+    return null;
+}
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Handle user joining the waiting queue
     socket.on('find-match', (userData) => {
-        console.log('User looking for match:', socket.id);
+        console.log('User looking for match:', socket.id, 'with data:', userData);
         
-        // Check if there's someone waiting
-        if (waitingUsers.length > 0) {
-            // Match with waiting user
-            const partner = waitingUsers.shift();
-            const roomId = `room_${socket.id}_${partner.id}`;
+        // Check if there's a compatible waiting user
+        const match = findBestMatch(userData);
+        
+        if (match) {
+            // Remove the matched user from waiting queue
+            const matchedUser = waitingUsers.splice(match.index, 1)[0];
+            const roomId = `room_${socket.id}_${matchedUser.id}`;
             
             // Join both users to the room
             socket.join(roomId);
-            partner.socket.join(roomId);
+            matchedUser.socket.join(roomId);
             
             // Store room info
-            activeRooms.set(socket.id, { roomId, partnerId: partner.id });
-            activeRooms.set(partner.id, { roomId, partnerId: socket.id });
+            activeRooms.set(socket.id, { roomId, partnerId: matchedUser.id });
+            activeRooms.set(matchedUser.id, { roomId, partnerId: socket.id });
             
             // Notify both users they've been matched
             socket.emit('match-found', { roomId, isInitiator: true });
-            partner.socket.emit('match-found', { roomId, isInitiator: false });
+            matchedUser.socket.emit('match-found', { roomId, isInitiator: false });
             
-            console.log(`Matched ${socket.id} with ${partner.id} in room ${roomId}`);
+            const user1Gender = userData.gender || userData.profile?.gender;
+            const user2Gender = matchedUser.gender || matchedUser.profile?.gender;
+            console.log(`Matched ${socket.id} (${user1Gender}) with ${matchedUser.id} (${user2Gender}) in room ${roomId} (${match.priority} match)`);
         } else {
-            // Add to waiting queue
-            waitingUsers.push({ id: socket.id, socket: socket, userData });
+            // Add to waiting queue with enhanced user data
+            waitingUsers.push({ 
+                id: socket.id, 
+                socket: socket, 
+                ...userData 
+            });
             socket.emit('waiting-for-match');
+            console.log(`Added ${socket.id} to waiting queue. Total waiting: ${waitingUsers.length}`);
         }
     });
 
     // Handle WebRTC signaling
-// Add room validation to prevent cross-room signaling
-socket.on('offer', (data) => {
-    if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
-        socket.to(data.roomId).emit('offer', data);
-        console.log(`Offer sent in room ${data.roomId}`);
-    } else {
-        console.log(`Invalid offer for room ${data.roomId} from ${socket.id}`);
-    }
-});
+    // Add room validation to prevent cross-room signaling
+    socket.on('offer', (data) => {
+        if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
+            socket.to(data.roomId).emit('offer', data);
+            console.log(`Offer sent in room ${data.roomId}`);
+        } else {
+            console.log(`Invalid offer for room ${data.roomId} from ${socket.id}`);
+        }
+    });
 
-socket.on('answer', (data) => {
-    if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
-        socket.to(data.roomId).emit('answer', data);
-        console.log(`Answer sent in room ${data.roomId}`);
-    } else {
-        console.log(`Invalid answer for room ${data.roomId} from ${socket.id}`);
-    }
-});
+    socket.on('answer', (data) => {
+        if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
+            socket.to(data.roomId).emit('answer', data);
+            console.log(`Answer sent in room ${data.roomId}`);
+        } else {
+            console.log(`Invalid answer for room ${data.roomId} from ${socket.id}`);
+        }
+    });
 
-socket.on('ice-candidate', (data) => {
-    if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
-        socket.to(data.roomId).emit('ice-candidate', data);
-    } else {
-        console.log(`Invalid ICE candidate for room ${data.roomId} from ${socket.id}`);
-    }
-});
-
+    socket.on('ice-candidate', (data) => {
+        if (activeRooms.has(socket.id) && activeRooms.get(socket.id).roomId === data.roomId) {
+            socket.to(data.roomId).emit('ice-candidate', data);
+        } else {
+            console.log(`Invalid ICE candidate for room ${data.roomId} from ${socket.id}`);
+        }
+    });
 
     // Handle chat messages
     socket.on('chat-message', (data) => {
@@ -97,8 +209,8 @@ socket.on('ice-candidate', (data) => {
     });
 
     // Handle user leaving/disconnecting
-    socket.on('leave-room', () => {
-        handleUserLeave(socket);
+    socket.on('leave-room', (data) => {
+        handleUserLeave(socket, data);
     });
 
     socket.on('disconnect', () => {
@@ -107,7 +219,7 @@ socket.on('ice-candidate', (data) => {
     });
 });
 
-function handleUserLeave(socket) {
+function handleUserLeave(socket, data = {}) {
     // Remove from waiting queue if present
     waitingUsers = waitingUsers.filter(user => user.id !== socket.id);
     
@@ -120,11 +232,18 @@ function handleUserLeave(socket) {
         
         // Clean up room data
         activeRooms.delete(socket.id);
-        activeRooms.delete(partnerId);
+        if (partnerId) {
+            activeRooms.delete(partnerId);
+        }
+        
+        console.log(`User ${socket.id} left room ${roomId}`);
     }
+    
+    console.log(`Waiting users: ${waitingUsers.length}, Active rooms: ${activeRooms.size}`);
 }
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT,'0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+    console.log('Country-based matching enabled');
 });
