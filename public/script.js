@@ -9,6 +9,8 @@ class VideoChat {
         this.streamUsageCount = 0; // Track how many connections use the stream
         this.isVideoEnabled = true;
         this.isAudioEnabled = true;
+        this.isRematchingInPlace = false; // Track if we're skipping and rematching in-place
+        this.rematchTimeoutId = null; // 3-minute timeout while waiting for next partner
         
         // User profile data
         this.userProfile = null;
@@ -170,8 +172,17 @@ class VideoChat {
     setupSocketListeners() {
         this.socket.on('waiting-for-match', () => {
             console.log('Waiting for match');
-            this.showScreen('waiting');
-            this.updateStatus('Looking for a chat partner...');
+            if (this.isRematchingInPlace) {
+                // Stay on chat screen and show overlay instead of navigating away
+                if (this.lookingForPartner) {
+                    this.lookingForPartner.classList.remove('hidden');
+                }
+                this.updateStatus('Looking for a new partner...');
+                this.startRematchTimeout();
+            } else {
+                this.showScreen('waiting');
+                this.updateStatus('Looking for a chat partner...');
+            }
         });
 
 this.socket.on('match-found', async (data) => {
@@ -179,6 +190,9 @@ this.socket.on('match-found', async (data) => {
 
     this.currentRoom = data.roomId;
     this.connectionState = 'matched';
+    // Clear any in-place rematch timeout/state
+    this.clearRematchTimeout();
+    this.isRematchingInPlace = false;
     
     // Hide "Looking for partner" overlay
     if (this.lookingForPartner) {
@@ -249,11 +263,31 @@ this.socket.on('match-found', async (data) => {
         this.socket.on('partner-left', () => {
             console.log('Partner left the chat');
             this.updateStatus('Partner left the chat');
-            this.resetChat();
-            setTimeout(() => {
-                this.showScreen('start');
-                this.updateStatus('Ready to connect');
-            }, 2000);
+            
+            // Check if we should auto-rematch (partner skipped us)
+            // If we're already in rematch mode, continue; otherwise start auto-rematch
+            if (!this.isRematchingInPlace) {
+                this.isRematchingInPlace = true;
+                this.resetChatForNextPartner();
+                
+                // Prepare user data for matching
+                const userData = {
+                    timestamp: Date.now(),
+                    profile: this.userProfile,
+                    country: this.userCountry || this.userProfile?.country,
+                    gender: this.userProfile?.gender,
+                    genderPreference: this.userProfile?.genderPreference,
+                    preferredCountries: this.userProfile?.preferredCountries || ['any'],
+                    countryFilter: this.userProfile?.countryFilter || 'any'
+                };
+                
+                setTimeout(() => {
+                    this.socket.emit('find-match', userData);
+                }, 500);
+            } else {
+                // Already in rematch mode, just reset chat normally
+                this.resetChat();
+            }
         });
         
         console.log('Socket listeners set up');
@@ -812,6 +846,7 @@ async checkMediaTransmission() {
         
         // Reset chat but keep local stream and stay on chat screen
         this.resetChatForNextPartner();
+        this.isRematchingInPlace = true;
         
         // Stay on chat screen but show "looking for partner" status
         // Don't change screens - keep user on video chat screen like Omegle
@@ -835,6 +870,8 @@ async checkMediaTransmission() {
     endChat() {
         console.log('Ending chat...');
         this.updateStatus('Chat ended');
+        this.clearRematchTimeout();
+        this.isRematchingInPlace = false;
         
         // Hide "Looking for partner" overlay if it's showing
         if (this.lookingForPartner) {
@@ -847,10 +884,14 @@ async checkMediaTransmission() {
     cancelWaiting() {
         console.log('Cancelling waiting...');
         this.socket.emit('leave-room');
+        this.clearRematchTimeout();
+        this.isRematchingInPlace = false;
         this.resetToStart();
     }
 
     resetToStart() {
+        this.clearRematchTimeout();
+        this.isRematchingInPlace = false;
         this.cleanup();
         this.showScreen('start');
         this.updateStatus('Ready to connect');
@@ -860,6 +901,8 @@ async checkMediaTransmission() {
         console.log('Resetting chat for room:', this.currentRoom);
         
         this.connectionState = 'resetting';
+        this.clearRematchTimeout();
+        this.isRematchingInPlace = false;
         
         // Close peer connection properly
         if (this.peerConnection) {
@@ -898,7 +941,7 @@ async checkMediaTransmission() {
             this.setupPeerConnection();
         }
         
-        // Emit leave room for the old room
+        // Emit leave room for the old room (regular disconnect, not skip)
         this.socket.emit('leave-room', { roomId: oldRoom });
         
         console.log('Chat reset complete');
@@ -946,13 +989,41 @@ async checkMediaTransmission() {
             this.lookingForPartner.classList.remove('hidden');
         }
         
-        // Emit leave room for the old room
-        this.socket.emit('leave-room', { roomId: oldRoom });
+        // Emit leave room for the old room with skip flag
+        this.socket.emit('leave-room', { roomId: oldRoom, isSkip: true });
         
         // Keep user on chat screen - don't change screens
         // This mimics Omegle behavior where you stay on video screen
         
         console.log('Chat reset for next partner complete - staying on chat screen');
+    }
+
+    startRematchTimeout() {
+        // If already timing, reset the timer
+        this.clearRematchTimeout();
+        // 3 minutes = 180000 ms
+        this.rematchTimeoutId = setTimeout(() => {
+            this.handleRematchTimeout();
+        }, 180000);
+        console.log('Rematch timeout started (3 minutes)');
+    }
+
+    clearRematchTimeout() {
+        if (this.rematchTimeoutId) {
+            clearTimeout(this.rematchTimeoutId);
+            this.rematchTimeoutId = null;
+            console.log('Rematch timeout cleared');
+        }
+    }
+
+    handleRematchTimeout() {
+        console.log('Rematch timeout reached - no partner found');
+        this.updateStatus('No one is available right now. Redirecting to start...');
+        try {
+            alert('No one is available right now. Please try again later.');
+        } catch (e) { /* ignore if alerts are blocked */ }
+        this.isRematchingInPlace = false;
+        this.resetToStart();
     }
 
 

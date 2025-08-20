@@ -227,13 +227,83 @@ function handleUserLeave(socket, data = {}) {
     if (activeRooms.has(socket.id)) {
         const { roomId, partnerId } = activeRooms.get(socket.id);
         
-        // Notify partner
-        socket.to(roomId).emit('partner-left');
-        
-        // Clean up room data
+        // Clean up room data first
         activeRooms.delete(socket.id);
         if (partnerId) {
             activeRooms.delete(partnerId);
+        }
+        
+        // Check if this is a skip operation (partner should auto-rematch)
+        if (data.isSkip && partnerId) {
+            // Find the partner socket
+            const partnerSocket = io.sockets.sockets.get(partnerId);
+            if (partnerSocket) {
+                // Automatically rematch the partner who got skipped
+                console.log(`Auto-rematching skipped partner ${partnerId}`);
+                
+                // Get the partner's user data from the room info or waiting queue
+                let partnerUserData = null;
+                
+                // Check if partner is already in waiting queue
+                const waitingPartner = waitingUsers.find(user => user.id === partnerId);
+                if (waitingPartner) {
+                    partnerUserData = {
+                        timestamp: Date.now(),
+                        profile: waitingPartner.profile,
+                        country: waitingPartner.country,
+                        gender: waitingPartner.gender,
+                        genderPreference: waitingPartner.genderPreference,
+                        preferredCountries: waitingPartner.preferredCountries,
+                        countryFilter: waitingPartner.countryFilter
+                    };
+                } else {
+                    // Create basic user data for rematch
+                    partnerUserData = {
+                        timestamp: Date.now(),
+                        profile: {},
+                        country: 'any',
+                        gender: 'any',
+                        genderPreference: 'any',
+                        preferredCountries: ['any'],
+                        countryFilter: 'any'
+                    };
+                }
+                
+                // Try to find a new match for the partner
+                const newMatch = findBestMatch(partnerUserData);
+                
+                if (newMatch) {
+                    // Remove the matched user from waiting queue
+                    const matchedUser = waitingUsers.splice(newMatch.index, 1)[0];
+                    const newRoomId = `room_${partnerId}_${matchedUser.id}`;
+                    
+                    // Join both users to the new room
+                    partnerSocket.join(newRoomId);
+                    matchedUser.socket.join(newRoomId);
+                    
+                    // Store new room info
+                    activeRooms.set(partnerId, { roomId: newRoomId, partnerId: matchedUser.id });
+                    activeRooms.set(matchedUser.id, { roomId: newRoomId, partnerId: partnerId });
+                    
+                    // Notify both users they've been matched
+                    partnerSocket.emit('match-found', { roomId: newRoomId, isInitiator: true });
+                    matchedUser.socket.emit('match-found', { roomId: newRoomId, isInitiator: false });
+                    
+                    console.log(`Auto-rematched ${partnerId} with ${matchedUser.id} in room ${newRoomId}`);
+                } else {
+                    // No immediate match available, add partner to waiting queue
+                    waitingUsers.push({
+                        id: partnerId,
+                        socket: partnerSocket,
+                        ...partnerUserData
+                    });
+                    partnerSocket.emit('waiting-for-match');
+                    console.log(`Added auto-rematched partner ${partnerId} to waiting queue`);
+                }
+            }
+        } else {
+            // Regular disconnect - notify partner normally
+            socket.to(roomId).emit('partner-left');
         }
         
         console.log(`User ${socket.id} left room ${roomId}`);
