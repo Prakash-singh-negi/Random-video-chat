@@ -17,6 +17,11 @@ class VideoChat {
         this.userIP = null;
         this.userCountry = null;
         
+        // Skip history tracking
+        this.skipHistory = new Map(); // Track recently skipped users
+        this.skipHistoryTimeout = 5 * 60 * 1000; // 5 minutes timeout for skip history
+        this.maxSkipHistorySize = 20; // Maximum number of users to remember
+        
         this.initializeElements();
         this.setupEventListeners();
         this.setupSocketListeners();
@@ -149,6 +154,9 @@ class VideoChat {
             this.debugMediaStates();
         });
         
+        // Add skip history debug info
+        console.log('Skip history info:', this.getSkipHistoryInfo());
+        
         this.chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 console.log('Enter pressed in chat input');
@@ -199,8 +207,15 @@ this.socket.on('match-found', async (data) => {
         this.lookingForPartner.classList.add('hidden');
     }
     
+    // Ensure chat is cleared for new partner
+    this.clearMessages();
+    this.closeChatPanel();
+    if (this.chatInput) {
+        this.chatInput.value = '';
+    }
+    
     this.showScreen('chat');
-    this.updateStatus('Connected! Setting up video...');
+    this.updateStatusWithSkipInfo('Connected! Setting up video...');
 
     // Ensure local media is ready
     if (!this.localStream) {
@@ -302,16 +317,64 @@ this.socket.on('match-found', async (data) => {
                 throw new Error('Browser does not support camera/microphone access');
             }
             
-            const constraints = {
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true
-                }
-            };
+            // Detect device type and set appropriate constraints
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isTablet = /iPad|Android(?=.*\bMobile\b)(?=.*\bSafari\b)/i.test(navigator.userAgent);
+            
+            console.log('Device detected:', { isMobile, isTablet });
+            
+            // Standardized video constraints for consistent dimensions across all devices
+            let constraints;
+            
+            if (isMobile) {
+                // Mobile-specific constraints for consistent dimensions
+                constraints = {
+                    video: {
+                        width: { ideal: 480, min: 320, max: 640 },
+                        height: { ideal: 360, min: 240, max: 480 },
+                        aspectRatio: { ideal: 4/3, min: 1.33, max: 1.78 },
+                        facingMode: 'user',
+                        frameRate: { ideal: 30, min: 15, max: 30 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+            } else if (isTablet) {
+                // Tablet-specific constraints
+                constraints = {
+                    video: {
+                        width: { ideal: 640, min: 480, max: 960 },
+                        height: { ideal: 480, min: 360, max: 720 },
+                        aspectRatio: { ideal: 4/3, min: 1.33, max: 1.78 },
+                        facingMode: 'user',
+                        frameRate: { ideal: 30, min: 15, max: 30 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+            } else {
+                // Desktop constraints
+                constraints = {
+                    video: {
+                        width: { ideal: 640, min: 480, max: 1280 },
+                        height: { ideal: 480, min: 360, max: 720 },
+                        aspectRatio: { ideal: 4/3, min: 1.33, max: 1.78 },
+                        facingMode: 'user',
+                        frameRate: { ideal: 30, min: 15, max: 30 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+            }
             
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             console.log('Got local stream');
@@ -325,6 +388,9 @@ this.socket.on('match-found', async (data) => {
             this.localVideo.onloadedmetadata = () => {
                 console.log('Local video metadata loaded');
                 console.log('Local video dimensions:', this.localVideo.videoWidth, 'x', this.localVideo.videoHeight);
+                
+                // Normalize video dimensions for consistent display
+                this.normalizeVideoDimensions(this.localVideo);
             };
             
             await this.setupPeerConnection();
@@ -444,6 +510,9 @@ async setupPeerConnection() {
         this.remoteVideo.onloadedmetadata = () => {
             console.log('Remote video loaded for room:', this.currentRoom);
             console.log('Remote video dimensions:', this.remoteVideo.videoWidth, 'x', this.remoteVideo.videoHeight);
+            
+            // Normalize remote video dimensions for consistent display
+            this.normalizeVideoDimensions(this.remoteVideo);
         };
         
         this.connectionState = 'connected';
@@ -842,7 +911,29 @@ async checkMediaTransmission() {
 
     nextChat() {
         console.log('Looking for next chat partner...');
-        this.updateStatus('Looking for a new partner...');
+        this.updateStatusWithSkipInfo('Looking for a new partner...');
+        
+        // Add current partner to skip history if we have a room
+        if (this.currentRoom) {
+            // Extract partner ID from room ID (format: room_<myId>_<partnerId> or room_<partnerId>_<myId>)
+            const roomParts = this.currentRoom.split('_');
+            if (roomParts.length === 3) {
+                const myId = this.socket.id;
+                const partnerId = roomParts[1] === myId ? roomParts[2] : roomParts[1];
+                this.addToSkipHistory(partnerId);
+                console.log(`Added partner ${partnerId} to skip history`);
+            }
+        }
+        
+        // Immediately clear chat before any other operations
+        this.clearMessagesWithNotification();
+        this.closeChatPanel();
+        if (this.chatInput) {
+            this.chatInput.value = '';
+        }
+        if (this.chatPanel) {
+            this.chatPanel.classList.remove('open');
+        }
         
         // Reset chat but keep local stream and stay on chat screen
         this.resetChatForNextPartner();
@@ -972,9 +1063,22 @@ async checkMediaTransmission() {
         this.currentRoom = null;
         this.connectionState = 'idle';
         
-        // Clear chat
-        this.clearMessages();
-        this.closeChatPanel();
+        // Clear chat completely with a small delay to ensure proper timing
+        setTimeout(() => {
+            console.log('Clearing chat for new partner...');
+            this.clearMessages();
+            this.closeChatPanel();
+            
+            // Additional safety: ensure chat input is cleared and panel is closed
+            if (this.chatInput) {
+                this.chatInput.value = '';
+                console.log('Chat input cleared');
+            }
+            if (this.chatPanel) {
+                this.chatPanel.classList.remove('open');
+                console.log('Chat panel closed');
+            }
+        }, 100);
         
         // Reset button states
         this.toggleVideoBtn.classList.remove('video-off');
@@ -1078,6 +1182,10 @@ async checkMediaTransmission() {
 
     closeChatPanel() {
         this.chatPanel.classList.remove('open');
+        // Ensure chat input is also cleared when closing panel
+        if (this.chatInput) {
+            this.chatInput.value = '';
+        }
         console.log('Chat panel closed');
     }
 
@@ -1115,7 +1223,170 @@ async checkMediaTransmission() {
 
     clearMessages() {
         this.chatMessages.innerHTML = '';
+        // Also clear the chat input field
+        if (this.chatInput) {
+            this.chatInput.value = '';
+        }
         console.log('Messages cleared');
+    }
+    
+    clearMessagesWithNotification() {
+        this.chatMessages.innerHTML = '';
+        // Also clear the chat input field
+        if (this.chatInput) {
+            this.chatInput.value = '';
+        }
+        
+        // Add a temporary notification that chat was cleared
+        const notificationDiv = document.createElement('div');
+        notificationDiv.className = 'message system-message';
+        notificationDiv.textContent = 'Chat cleared for new partner';
+        notificationDiv.style.textAlign = 'center';
+        notificationDiv.style.color = '#888';
+        notificationDiv.style.fontStyle = 'italic';
+        notificationDiv.style.fontSize = '0.9rem';
+        notificationDiv.style.padding = '0.5rem';
+        notificationDiv.style.margin = '0.5rem 0';
+        
+        this.chatMessages.appendChild(notificationDiv);
+        
+        // Remove the notification after 3 seconds
+        setTimeout(() => {
+            if (notificationDiv.parentNode) {
+                notificationDiv.parentNode.removeChild(notificationDiv);
+            }
+        }, 3000);
+        
+        console.log('Messages cleared with notification');
+    }
+    
+    normalizeVideoDimensions(videoElement) {
+        // Ensure consistent aspect ratio and dimensions across devices
+        const targetAspectRatio = 4/3; // Standard aspect ratio
+        const currentWidth = videoElement.videoWidth;
+        const currentHeight = videoElement.videoHeight;
+        const currentAspectRatio = currentWidth / currentHeight;
+        
+        console.log('Normalizing video dimensions:', {
+            current: `${currentWidth}x${currentHeight}`,
+            aspectRatio: currentAspectRatio.toFixed(2),
+            targetAspectRatio: targetAspectRatio.toFixed(2)
+        });
+        
+        // Set CSS properties to ensure consistent display
+        videoElement.style.objectFit = 'cover';
+        videoElement.style.objectPosition = 'center';
+        
+        // Add a class to the video container for consistent styling
+        const videoContainer = videoElement.closest('.video-box');
+        if (videoContainer) {
+            videoContainer.classList.add('normalized-video');
+        }
+        
+        // Handle mobile orientation changes
+        this.handleMobileOrientation(videoElement);
+    }
+    
+    handleMobileOrientation(videoElement) {
+        // Check if device is mobile
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            // Listen for orientation changes
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    // Re-normalize video after orientation change
+                    this.normalizeVideoDimensions(videoElement);
+                }, 100);
+            });
+            
+            // Also listen for resize events
+            window.addEventListener('resize', () => {
+                setTimeout(() => {
+                    this.normalizeVideoDimensions(videoElement);
+                }, 100);
+            });
+        }
+    }
+    
+    // Skip history management methods
+    addToSkipHistory(partnerId) {
+        const now = Date.now();
+        this.skipHistory.set(partnerId, now);
+        
+        // Clean up old entries
+        this.cleanupSkipHistory();
+        
+        console.log(`Added ${partnerId} to skip history. Total skipped users: ${this.skipHistory.size}`);
+    }
+    
+    isUserInSkipHistory(partnerId) {
+        const skipTime = this.skipHistory.get(partnerId);
+        if (!skipTime) return false;
+        
+        const now = Date.now();
+        const timeSinceSkip = now - skipTime;
+        
+        // Check if enough time has passed (5 minutes)
+        if (timeSinceSkip > this.skipHistoryTimeout) {
+            this.skipHistory.delete(partnerId);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    cleanupSkipHistory() {
+        const now = Date.now();
+        const expiredUsers = [];
+        
+        // Find expired entries
+        for (const [userId, skipTime] of this.skipHistory.entries()) {
+            if (now - skipTime > this.skipHistoryTimeout) {
+                expiredUsers.push(userId);
+            }
+        }
+        
+        // Remove expired entries
+        expiredUsers.forEach(userId => {
+            this.skipHistory.delete(userId);
+        });
+        
+        // If still too many entries, remove oldest ones
+        if (this.skipHistory.size > this.maxSkipHistorySize) {
+            const entries = Array.from(this.skipHistory.entries());
+            entries.sort((a, b) => a[1] - b[1]); // Sort by timestamp
+            
+            const toRemove = entries.slice(0, this.skipHistory.size - this.maxSkipHistorySize);
+            toRemove.forEach(([userId]) => {
+                this.skipHistory.delete(userId);
+            });
+        }
+        
+        if (expiredUsers.length > 0 || this.skipHistory.size > this.maxSkipHistorySize) {
+            console.log(`Cleaned up skip history. Removed ${expiredUsers.length} expired entries. Current size: ${this.skipHistory.size}`);
+        }
+    }
+    
+    getSkipHistoryInfo() {
+        const now = Date.now();
+        const activeSkips = [];
+        
+        for (const [userId, skipTime] of this.skipHistory.entries()) {
+            const timeRemaining = Math.max(0, this.skipHistoryTimeout - (now - skipTime));
+            if (timeRemaining > 0) {
+                activeSkips.push({
+                    userId,
+                    timeRemaining: Math.ceil(timeRemaining / 1000) // Convert to seconds
+                });
+            }
+        }
+        
+        return {
+            totalSkipped: this.skipHistory.size,
+            activeSkips: activeSkips.length,
+            skipTimeout: Math.ceil(this.skipHistoryTimeout / 1000) // Convert to seconds
+        };
     }
 
     showScreen(screenName) {
@@ -1136,6 +1407,17 @@ async checkMediaTransmission() {
     updateStatus(message) {
         this.statusText.textContent = message;
         console.log('Status updated:', message);
+    }
+    
+    updateStatusWithSkipInfo(message) {
+        const skipInfo = this.getSkipHistoryInfo();
+        if (skipInfo.activeSkips > 0) {
+            const skipMessage = ` | Skipped ${skipInfo.activeSkips} users (${skipInfo.skipTimeout}s timeout)`;
+            this.statusText.textContent = message + skipMessage;
+        } else {
+            this.statusText.textContent = message;
+        }
+        console.log('Status updated with skip info:', message, skipInfo);
     }
 
     // Profile Management Methods

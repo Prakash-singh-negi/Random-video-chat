@@ -19,6 +19,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 let waitingUsers = [];
 let activeRooms = new Map();
 
+// Store skip history for each user
+let userSkipHistory = new Map(); // userId -> Set of skipped user IDs
+const SKIP_HISTORY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const MAX_SKIP_HISTORY_SIZE = 20; // Maximum number of users to remember per user
+
 // Gender and country matching utility functions
 function canMatchUsers(user1, user2) {
     // Check gender compatibility first
@@ -69,10 +74,86 @@ function canMatchUsers(user1, user2) {
     return true;
 }
 
+// Skip history management functions
+function addToSkipHistory(userId, skippedUserId) {
+    if (!userSkipHistory.has(userId)) {
+        userSkipHistory.set(userId, new Map());
+    }
+    
+    const userSkips = userSkipHistory.get(userId);
+    userSkips.set(skippedUserId, Date.now());
+    
+    // Clean up old entries
+    cleanupUserSkipHistory(userId);
+    
+    console.log(`Added ${skippedUserId} to skip history for ${userId}`);
+}
+
+function isUserInSkipHistory(userId, targetUserId) {
+    const userSkips = userSkipHistory.get(userId);
+    if (!userSkips) return false;
+    
+    const skipTime = userSkips.get(targetUserId);
+    if (!skipTime) return false;
+    
+    const now = Date.now();
+    const timeSinceSkip = now - skipTime;
+    
+    // Check if enough time has passed
+    if (timeSinceSkip > SKIP_HISTORY_TIMEOUT) {
+        userSkips.delete(targetUserId);
+        return false;
+    }
+    
+    return true;
+}
+
+function cleanupUserSkipHistory(userId) {
+    const userSkips = userSkipHistory.get(userId);
+    if (!userSkips) return;
+    
+    const now = Date.now();
+    const expiredUsers = [];
+    
+    // Find expired entries
+    for (const [skippedUserId, skipTime] of userSkips.entries()) {
+        if (now - skipTime > SKIP_HISTORY_TIMEOUT) {
+            expiredUsers.push(skippedUserId);
+        }
+    }
+    
+    // Remove expired entries
+    expiredUsers.forEach(skippedUserId => {
+        userSkips.delete(skippedUserId);
+    });
+    
+    // If still too many entries, remove oldest ones
+    if (userSkips.size > MAX_SKIP_HISTORY_SIZE) {
+        const entries = Array.from(userSkips.entries());
+        entries.sort((a, b) => a[1] - b[1]); // Sort by timestamp
+        
+        const toRemove = entries.slice(0, userSkips.size - MAX_SKIP_HISTORY_SIZE);
+        toRemove.forEach(([skippedUserId]) => {
+            userSkips.delete(skippedUserId);
+        });
+    }
+    
+    if (expiredUsers.length > 0 || userSkips.size > MAX_SKIP_HISTORY_SIZE) {
+        console.log(`Cleaned up skip history for ${userId}. Removed ${expiredUsers.length} expired entries. Current size: ${userSkips.size}`);
+    }
+}
+
 function findBestMatch(newUser) {
     // First, try to find an exact gender AND country match
     for (let i = 0; i < waitingUsers.length; i++) {
         const waitingUser = waitingUsers[i];
+        
+        // Check if either user has the other in their skip history
+        if (isUserInSkipHistory(newUser.id, waitingUser.id) || 
+            isUserInSkipHistory(waitingUser.id, newUser.id)) {
+            continue; // Skip this match
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             const newUserGender = newUser.gender || newUser.profile?.gender;
             const waitingUserGender = waitingUser.gender || waitingUser.profile?.gender;
@@ -89,6 +170,13 @@ function findBestMatch(newUser) {
     // Second, try to find an exact gender match
     for (let i = 0; i < waitingUsers.length; i++) {
         const waitingUser = waitingUsers[i];
+        
+        // Check if either user has the other in their skip history
+        if (isUserInSkipHistory(newUser.id, waitingUser.id) || 
+            isUserInSkipHistory(waitingUser.id, newUser.id)) {
+            continue; // Skip this match
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             const newUserGender = newUser.gender || newUser.profile?.gender;
             const waitingUserGender = waitingUser.gender || waitingUser.profile?.gender;
@@ -102,6 +190,13 @@ function findBestMatch(newUser) {
     // Third, try to find an exact country match
     for (let i = 0; i < waitingUsers.length; i++) {
         const waitingUser = waitingUsers[i];
+        
+        // Check if either user has the other in their skip history
+        if (isUserInSkipHistory(newUser.id, waitingUser.id) || 
+            isUserInSkipHistory(waitingUser.id, newUser.id)) {
+            continue; // Skip this match
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             const newUserCountry = newUser.country || newUser.profile?.country;
             const waitingUserCountry = waitingUser.country || waitingUser.profile?.country;
@@ -115,6 +210,13 @@ function findBestMatch(newUser) {
     // Finally, try to find any compatible match
     for (let i = 0; i < waitingUsers.length; i++) {
         const waitingUser = waitingUsers[i];
+        
+        // Check if either user has the other in their skip history
+        if (isUserInSkipHistory(newUser.id, waitingUser.id) || 
+            isUserInSkipHistory(waitingUser.id, newUser.id)) {
+            continue; // Skip this match
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             return { index: i, user: waitingUser, priority: 'compatible' };
         }
@@ -216,6 +318,10 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         handleUserLeave(socket);
+        
+        // Clean up skip history for disconnected user
+        userSkipHistory.delete(socket.id);
+        console.log(`Cleaned up skip history for disconnected user ${socket.id}`);
     });
 });
 
@@ -235,6 +341,9 @@ function handleUserLeave(socket, data = {}) {
         
         // Check if this is a skip operation (partner should auto-rematch)
         if (data.isSkip && partnerId) {
+            // Add the skipped user to the skipper's skip history
+            addToSkipHistory(socket.id, partnerId);
+            
             // Find the partner socket
             const partnerSocket = io.sockets.sockets.get(partnerId);
             if (partnerSocket) {
@@ -312,8 +421,26 @@ function handleUserLeave(socket, data = {}) {
     console.log(`Waiting users: ${waitingUsers.length}, Active rooms: ${activeRooms.size}`);
 }
 
+// Periodic cleanup of skip history
+setInterval(() => {
+    const now = Date.now();
+    let totalCleaned = 0;
+    
+    for (const [userId, userSkips] of userSkipHistory.entries()) {
+        const beforeSize = userSkips.size;
+        cleanupUserSkipHistory(userId);
+        const afterSize = userSkips.size;
+        totalCleaned += (beforeSize - afterSize);
+    }
+    
+    if (totalCleaned > 0) {
+        console.log(`Periodic cleanup: Removed ${totalCleaned} expired skip history entries`);
+    }
+}, 60000); // Run every minute
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT,'0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     console.log('Country-based matching enabled');
+    console.log('Skip history protection enabled (5-minute timeout)');
 });
