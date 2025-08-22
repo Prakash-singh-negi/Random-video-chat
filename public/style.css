@@ -480,53 +480,63 @@ body {
 @media (max-width: 1100px) and (min-width: 901px) {
   .video-controls-wrapper {
     height: auto;
-    min-height: calc(100vh - 200px);
-    gap: 1.8rem;
+    min-height: calc(100vh - 180px);
+    gap: 2rem;
     justify-content: flex-start;
-    padding-bottom: 1.5rem;
+    padding-bottom: 2rem;
+    width: 96vw;
+    max-width: 96vw;
+  }
+  .video-area {
+    width: 96vw;
+    max-width: 96vw;
+    gap: 2vh;
   }
   .video-box {
-    max-height: 55vh;
-    min-height: 280px;
+    max-height: 60vh;
+    min-height: 300px;
+    width: 96%;
+    max-width: 96%;
   }
   .controls-bar {
-    max-width: 85vw;
-    gap: 1.5rem;
-    padding: 0.9rem 2rem;
+    max-width: 90vw;
+    gap: 1.8rem;
+    padding: 1rem 2.2rem;
     margin-top: auto;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    width: 90%;
   }
   .control-btn {
-    padding: 0.8rem 1rem;
-    font-size: 1.05rem;
-    min-width: 48px;
-    min-height: 48px;
+    padding: 0.9rem 1.1rem;
+    font-size: 1.1rem;
+    min-width: 52px;
+    min-height: 52px;
   }
   .icon-svg svg {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
   }
 }
 
 @media (max-width: 900px) {
   .video-controls-wrapper {
     height: auto;
-    min-height: calc(100vh - 160px);
-    gap: 1.5rem;
+    min-height: calc(100vh - 120px);
+    gap: 2rem;
     justify-content: flex-start;
-    padding-bottom: 2rem;
+    padding-bottom: 2.5rem;
     width: 98vw;
     max-width: 98vw;
   }
   .video-area { 
     flex-direction: column; 
-    gap: 1.5vh; 
+    gap: 2vh; 
     width: 98vw;
     max-width: 98vw;
   }
   .video-box { 
-    max-height: 35vh; 
-    min-height: 200px; 
+    max-height: 40vh; 
+    min-height: 250px; 
     aspect-ratio: 4/3;
     width: 95%;
     max-width: 95%;
@@ -539,20 +549,20 @@ body {
   .controls-bar { 
     max-width: 95vw; 
     width: 95%; 
-    gap: 1rem;
-    padding: 0.7rem 1.2rem;
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+    gap: 1.2rem;
+    padding: 0.8rem 1.5rem;
+    margin-top: 2.5rem;
+    margin-bottom: 1.5rem;
   }
   .control-btn {
-    padding: 0.6rem 0.7rem;
-    font-size: 0.95rem;
-    min-width: 45px;
-    min-height: 45px;
+    padding: 0.7rem 0.8rem;
+    font-size: 1rem;
+    min-width: 48px;
+    min-height: 48px;
   }
   .icon-svg svg {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
   }
   .chat-panel { width: 100vw; right: -100vw; }
   .chat-panel.open { right: 0; }
@@ -565,24 +575,39 @@ body {
 /* Specific spacing for tablet screens around 768px */
 @media (max-width: 768px) and (min-width: 600px) {
   .video-controls-wrapper {
-    gap: 2rem;
-    padding-bottom: 2.5rem;
+    gap: 2.5rem;
+    padding-bottom: 3rem;
     width: 98vw;
     max-width: 98vw;
+    min-height: calc(100vh - 100px);
   }
   .video-area {
     width: 98vw;
     max-width: 98vw;
+    gap: 2.5vh;
   }
   .video-box {
     width: 95%;
     max-width: 95%;
+    max-height: 45vh;
+    min-height: 280px;
   }
   .controls-bar {
-    margin-top: 2.5rem;
-    margin-bottom: 1.5rem;
+    margin-top: 3rem;
+    margin-bottom: 2rem;
     width: 95%;
     max-width: 95%;
+    padding: 1rem 2rem;
+  }
+  .control-btn {
+    padding: 0.8rem 1rem;
+    font-size: 1.05rem;
+    min-width: 50px;
+    min-height: 50px;
+  }
+  .icon-svg svg {
+    width: 30px;
+    height: 30px;
   }
 }
 @media (max-width: 600px) {
