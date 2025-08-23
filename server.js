@@ -154,6 +154,12 @@ function findBestMatch(newUser) {
             continue; // Skip this match
         }
         
+        // Also check client-side skip history if provided
+        if (newUser.skipHistory && newUser.skipHistory.includes(waitingUser.id)) {
+            console.log(`Skipping ${waitingUser.id} due to client-side skip history from ${newUser.id}`);
+            continue;
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             const newUserGender = newUser.gender || newUser.profile?.gender;
             const waitingUserGender = waitingUser.gender || waitingUser.profile?.gender;
@@ -177,6 +183,11 @@ function findBestMatch(newUser) {
             continue; // Skip this match
         }
         
+        // Also check client-side skip history if provided
+        if (newUser.skipHistory && newUser.skipHistory.includes(waitingUser.id)) {
+            continue;
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             const newUserGender = newUser.gender || newUser.profile?.gender;
             const waitingUserGender = waitingUser.gender || waitingUser.profile?.gender;
@@ -197,6 +208,11 @@ function findBestMatch(newUser) {
             continue; // Skip this match
         }
         
+        // Also check client-side skip history if provided
+        if (newUser.skipHistory && newUser.skipHistory.includes(waitingUser.id)) {
+            continue;
+        }
+        
         if (canMatchUsers(newUser, waitingUser)) {
             const newUserCountry = newUser.country || newUser.profile?.country;
             const waitingUserCountry = waitingUser.country || waitingUser.profile?.country;
@@ -215,6 +231,11 @@ function findBestMatch(newUser) {
         if (isUserInSkipHistory(newUser.id, waitingUser.id) || 
             isUserInSkipHistory(waitingUser.id, newUser.id)) {
             continue; // Skip this match
+        }
+        
+        // Also check client-side skip history if provided
+        if (newUser.skipHistory && newUser.skipHistory.includes(waitingUser.id)) {
+            continue;
         }
         
         if (canMatchUsers(newUser, waitingUser)) {
@@ -344,6 +365,11 @@ function handleUserLeave(socket, data = {}) {
             // Add the skipped user to the skipper's skip history
             addToSkipHistory(socket.id, partnerId);
             
+            // Also add the skipper to the skipped user's skip history to prevent re-matching
+            addToSkipHistory(partnerId, socket.id);
+            
+            console.log(`User ${socket.id} skipped ${partnerId}. Both users added to each other's skip history.`);
+            
             // Find the partner socket
             const partnerSocket = io.sockets.sockets.get(partnerId);
             if (partnerSocket) {
@@ -407,15 +433,19 @@ function handleUserLeave(socket, data = {}) {
                         ...partnerUserData
                     });
                     partnerSocket.emit('waiting-for-match');
-                    console.log(`Added auto-rematched partner ${partnerId} to waiting queue`);
+                    console.log(`Added skipped partner ${partnerId} to waiting queue for rematch`);
                 }
             }
         } else {
-            // Regular disconnect - notify partner normally
-            socket.to(roomId).emit('partner-left');
+            // Regular disconnect - notify partner
+            if (partnerId) {
+                const partnerSocket = io.sockets.sockets.get(partnerId);
+                if (partnerSocket) {
+                    partnerSocket.emit('partner-disconnected');
+                    console.log(`Notified partner ${partnerId} that ${socket.id} disconnected`);
+                }
+            }
         }
-        
-        console.log(`User ${socket.id} left room ${roomId}`);
     }
     
     console.log(`Waiting users: ${waitingUsers.length}, Active rooms: ${activeRooms.size}`);

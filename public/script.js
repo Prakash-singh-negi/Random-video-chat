@@ -26,8 +26,884 @@ class VideoChat {
         this.setupEventListeners();
         this.setupSocketListeners();
         this.loadUserProfile();
+        this.initializeNavbar();
+        this.initializeVisualEffects();
+        this.setupFormValidation();
+        this.setupEnhancedVideoControls();
+        this.setupResponsiveBehavior();
+        this.setupTouchHandling();
+        this.setupDraggableChat();
         
         console.log('VideoChat initialized');
+    }
+
+    // Demo functionality for navbar
+    initializeNavbarDemo() {
+        // Simulate notifications
+        let notificationCount = 3;
+        this.updateNotificationCount(notificationCount);
+
+        // Simulate notification updates
+        setInterval(() => {
+            if (Math.random() > 0.7) { // 30% chance every interval
+                notificationCount = Math.max(0, notificationCount + (Math.random() > 0.5 ? 1 : -1));
+                this.updateNotificationCount(notificationCount);
+            }
+        }, 10000); // Check every 10 seconds
+
+        // Update navbar based on current screen
+        this.updateNavbarForScreen();
+    }
+
+    // Enhanced visual effects
+    initializeVisualEffects() {
+        // Add particle interaction
+        this.setupParticleInteraction();
+        
+        // Add smooth page transitions
+        this.setupPageTransitions();
+        
+        // Add loading animations
+        this.setupLoadingAnimations();
+        
+        console.log('Visual effects initialized');
+    }
+
+    // Setup particle interaction
+    setupParticleInteraction() {
+        const particles = document.querySelectorAll('.particle');
+        
+        particles.forEach(particle => {
+            particle.addEventListener('mouseenter', () => {
+                particle.style.transform = 'scale(2)';
+                particle.style.opacity = '0.8';
+                particle.style.background = 'linear-gradient(135deg, var(--accent-color), var(--primary-color))';
+            });
+            
+            particle.addEventListener('mouseleave', () => {
+                particle.style.transform = 'scale(1)';
+                particle.style.opacity = '0.3';
+                particle.style.background = 'linear-gradient(135deg, var(--primary-color), var(--secondary-color))';
+            });
+        });
+    }
+
+    // Setup smooth page transitions
+    setupPageTransitions() {
+        const screens = document.querySelectorAll('.screen');
+        
+        screens.forEach(screen => {
+            screen.addEventListener('transitionend', () => {
+                if (screen.classList.contains('active')) {
+                    screen.style.animation = 'fadeInUp 0.6s ease-out';
+                }
+            });
+        });
+    }
+
+    // Setup loading animations
+    setupLoadingAnimations() {
+        // Add loading states to buttons
+        const buttons = document.querySelectorAll('.btn');
+        
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (!button.classList.contains('loading')) {
+                    button.classList.add('loading');
+                    button.innerHTML = '<div class="btn-spinner"></div> Loading...';
+                    
+                    // Remove loading state after animation
+                    setTimeout(() => {
+                        button.classList.remove('loading');
+                        button.innerHTML = button.getAttribute('data-original-text') || 'Continue';
+                    }, 2000);
+                }
+            });
+            
+            // Store original text
+            button.setAttribute('data-original-text', button.innerHTML);
+        });
+    }
+
+    // Enhanced status updates with animations
+    updateStatusWithAnimation(message, type = 'info') {
+        const statusBar = this.statusText;
+        const originalText = statusBar.textContent;
+        
+        // Add animation class
+        statusBar.style.animation = 'fadeInOut 0.5s ease-in-out';
+        
+        // Update text
+        statusBar.textContent = message;
+        
+        // Add status type styling
+        statusBar.className = `status-message ${type}`;
+        
+        // Remove animation class
+        setTimeout(() => {
+            statusBar.style.animation = '';
+        }, 500);
+        
+        // Auto-revert to original text after delay
+        setTimeout(() => {
+            statusBar.textContent = originalText;
+            statusBar.className = '';
+        }, 3000);
+    }
+
+    // Enhanced screen transitions
+    showScreenWithAnimation(screenId) {
+        const currentScreen = document.querySelector('.screen.active');
+        const targetScreen = document.getElementById(screenId);
+        
+        if (currentScreen && targetScreen) {
+            // Fade out current screen
+            currentScreen.style.animation = 'fadeOut 0.3s ease-out';
+            
+            setTimeout(() => {
+                // Hide current screen
+                currentScreen.classList.remove('active');
+                currentScreen.style.animation = '';
+                
+                // Show target screen with animation
+                targetScreen.classList.add('active');
+                targetScreen.style.animation = 'fadeInUp 0.6s ease-out';
+                
+                // Update navbar state
+                this.updateNavbarForScreen();
+                
+                // Close mobile menu if open
+                const navMenu = document.querySelector('.nav-menu');
+                const navToggle = document.getElementById('nav-toggle');
+                if (navMenu && navMenu.classList.contains('active')) {
+                    navMenu.classList.remove('active');
+                    navToggle.classList.remove('active');
+                }
+            }, 300);
+        }
+    }
+
+    // Enhanced form validation with visual feedback
+    setupFormValidation() {
+        const form = this.profileForm;
+        const inputs = form.querySelectorAll('input, select');
+        
+        inputs.forEach(input => {
+            input.addEventListener('blur', () => {
+                this.validateField(input);
+            });
+            
+            input.addEventListener('input', () => {
+                if (input.classList.contains('error')) {
+                    this.clearFieldError(input);
+                }
+            });
+        });
+    }
+
+    // Validate individual form field
+    validateField(field) {
+        const value = field.value.trim();
+        const isValid = field.checkValidity();
+        
+        if (!isValid && value !== '') {
+            this.showFieldError(field, field.validationMessage);
+        } else if (isValid) {
+            this.clearFieldError(field);
+        }
+    }
+
+    // Show field error
+    showFieldError(field, message) {
+        field.classList.add('error');
+        
+        // Create or update error message
+        let errorElement = field.parentNode.querySelector('.field-error');
+        if (!errorElement) {
+            errorElement = document.createElement('div');
+            errorElement.className = 'field-error';
+            field.parentNode.appendChild(errorElement);
+        }
+        
+        errorElement.textContent = message;
+        errorElement.style.color = 'var(--error-color)';
+        errorElement.style.fontSize = '0.875rem';
+        errorElement.style.marginTop = '0.5rem';
+    }
+
+    // Clear field error
+    clearFieldError(field) {
+        field.classList.remove('error');
+        
+        const errorElement = field.parentNode.querySelector('.field-error');
+        if (errorElement) {
+            errorElement.remove();
+        }
+    }
+
+    // Enhanced video controls with visual feedback
+    setupEnhancedVideoControls() {
+        const videoControls = [
+            this.toggleVideoBtn,
+            this.toggleAudioBtn,
+            this.nextChatBtn,
+            this.endChatBtn,
+            this.toggleChatBtn
+        ];
+        
+        videoControls.forEach(control => {
+            if (control) {
+                control.addEventListener('click', () => {
+                    // Add click animation
+                    control.style.transform = 'scale(0.95)';
+                    
+                    setTimeout(() => {
+                        control.style.transform = 'scale(1)';
+                    }, 150);
+                });
+            }
+        });
+    }
+
+    // Enhanced responsive behavior
+    setupResponsiveBehavior() {
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.handleResize();
+        });
+        
+        // Handle orientation change
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                this.handleResize();
+            }, 100);
+        });
+        
+        // Initial responsive setup
+        this.handleResize();
+        
+        console.log('Responsive behavior initialized');
+    }
+
+    // Handle responsive layout changes
+    handleResize() {
+        const isMobile = window.innerWidth <= 768;
+        const isTablet = window.innerWidth > 768 && window.innerWidth <= 1024;
+        const isLandscape = window.innerHeight < window.innerWidth;
+        
+        // Update video layout for mobile
+        if (isMobile) {
+            this.updateMobileLayout();
+        } else if (isTablet) {
+            this.updateTabletLayout();
+        } else {
+            this.updateDesktopLayout();
+        }
+        
+        // Handle landscape orientation
+        if (isLandscape && isMobile) {
+            this.updateLandscapeLayout();
+        }
+        
+        // Update chat panel position
+        this.updateChatPanelPosition();
+        
+        // Update button spacing
+        this.updateButtonSpacing();
+    }
+
+    // Update layout for mobile devices
+    updateMobileLayout() {
+        const videoArea = document.querySelector('.video-area');
+        const controlsBar = document.querySelector('.controls-bar');
+        const chatPanel = document.querySelector('.chat-panel');
+        
+        if (videoArea) {
+            videoArea.style.gridTemplateColumns = '1fr';
+            videoArea.style.gap = '1rem';
+        }
+        
+        if (controlsBar) {
+            controlsBar.style.gap = '0.5rem';
+            controlsBar.style.padding = '1rem';
+            controlsBar.style.flexWrap = 'wrap';
+            controlsBar.style.justifyContent = 'center';
+        }
+        
+        if (chatPanel) {
+            chatPanel.style.right = '0.5rem';
+            chatPanel.style.left = '0.5rem';
+            chatPanel.style.width = 'auto';
+            chatPanel.style.maxWidth = 'none';
+        }
+    }
+
+    // Update layout for tablet devices
+    updateTabletLayout() {
+        const videoArea = document.querySelector('.video-area');
+        const controlsBar = document.querySelector('.controls-bar');
+        
+        if (videoArea) {
+            if (window.innerHeight < window.innerWidth) {
+                // Landscape tablet
+                videoArea.style.gridTemplateColumns = '1fr 1fr';
+                videoArea.style.gap = '1.5rem';
+            } else {
+                // Portrait tablet
+                videoArea.style.gridTemplateColumns = '1fr';
+                videoArea.style.gap = '1rem';
+            }
+        }
+        
+        if (controlsBar) {
+            controlsBar.style.gap = '0.75rem';
+            controlsBar.style.padding = '1.25rem';
+        }
+    }
+
+    // Update layout for desktop devices
+    updateDesktopLayout() {
+        const videoArea = document.querySelector('.video-area');
+        const controlsBar = document.querySelector('.controls-bar');
+        const chatPanel = document.querySelector('.chat-panel');
+        
+        if (videoArea) {
+            videoArea.style.gridTemplateColumns = '2fr 1fr';
+            videoArea.style.gap = '1.5rem';
+        }
+        
+        if (controlsBar) {
+            controlsBar.style.gap = '1rem';
+            controlsBar.style.padding = '1.5rem';
+        }
+        
+        if (chatPanel) {
+            chatPanel.style.right = '2rem';
+            chatPanel.style.left = 'auto';
+            chatPanel.style.width = '350px';
+        }
+    }
+
+    // Update layout for landscape orientation
+    updateLandscapeLayout() {
+        const videoArea = document.querySelector('.video-area');
+        const controlsBar = document.querySelector('.controls-bar');
+        
+        if (videoArea) {
+            videoArea.style.gridTemplateColumns = '1fr 1fr';
+            videoArea.style.gap = '1rem';
+        }
+        
+        if (controlsBar) {
+            controlsBar.style.gap = '0.75rem';
+            controlsBar.style.padding = '1rem';
+        }
+    }
+
+    // Update chat panel position based on screen size
+    updateChatPanelPosition() {
+        const chatPanel = document.querySelector('.chat-panel');
+        if (!chatPanel) return;
+        
+        const isMobile = window.innerWidth <= 768;
+        const isLandscape = window.innerHeight < window.innerWidth;
+        
+        if (isMobile) {
+            if (isLandscape) {
+                chatPanel.style.maxHeight = '70vh';
+                chatPanel.style.top = '50%';
+                chatPanel.style.transform = 'translateY(-50%)';
+            } else {
+                chatPanel.style.maxHeight = '80vh';
+                chatPanel.style.top = '50%';
+                chatPanel.style.transform = 'translateY(-50%)';
+            }
+        } else {
+            chatPanel.style.maxHeight = '80vh';
+            chatPanel.style.top = '50%';
+            chatPanel.style.transform = 'translateY(-50%)';
+        }
+    }
+
+    // Update button spacing based on screen size
+    updateButtonSpacing() {
+        const btnGroups = document.querySelectorAll('.btn-group');
+        const isMobile = window.innerWidth <= 768;
+        const isSmallMobile = window.innerWidth <= 480;
+        
+        btnGroups.forEach(group => {
+            if (isSmallMobile) {
+                group.style.flexDirection = 'column';
+                group.style.alignItems = 'center';
+                group.style.gap = '0.5rem';
+            } else if (isMobile) {
+                group.style.flexDirection = 'column';
+                group.style.alignItems = 'center';
+                group.style.gap = '0.75rem';
+            } else {
+                group.style.flexDirection = 'row';
+                group.style.alignItems = 'center';
+                group.style.gap = '1rem';
+            }
+        });
+    }
+
+    // Enhanced touch handling for mobile devices
+    setupTouchHandling() {
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        if (isTouchDevice) {
+            // Add touch-specific event listeners
+            this.setupTouchEvents();
+            
+            // Optimize for touch devices
+            this.optimizeForTouch();
+        }
+    }
+
+    // Setup touch-specific events
+    setupTouchEvents() {
+        const touchElements = document.querySelectorAll('.btn, .control-btn, .video-box');
+        
+        touchElements.forEach(element => {
+            element.addEventListener('touchstart', (e) => {
+                element.style.transform = 'scale(0.95)';
+            });
+            
+            element.addEventListener('touchend', (e) => {
+                element.style.transform = 'scale(1)';
+            });
+            
+            element.addEventListener('touchcancel', (e) => {
+                element.style.transform = 'scale(1)';
+            });
+        });
+    }
+
+    // Optimize interface for touch devices
+    optimizeForTouch() {
+        // Increase touch targets
+        const touchTargets = document.querySelectorAll('.control-btn, .btn, .form-group input, .form-group select');
+        
+        touchTargets.forEach(target => {
+            target.style.minHeight = '44px';
+            target.style.minWidth = '44px';
+        });
+        
+        // Add touch-friendly spacing
+        const controlsBar = document.querySelector('.controls-bar');
+        if (controlsBar) {
+            controlsBar.style.gap = '0.75rem';
+        }
+    }
+
+    // Setup draggable chat panel
+    setupDraggableChat() {
+        const chatPanel = document.querySelector('.chat-panel');
+        if (!chatPanel) return;
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        // Store initial position
+        const rect = chatPanel.getBoundingClientRect();
+        xOffset = rect.left;
+        yOffset = rect.top;
+        
+        // Mouse events
+        chatPanel.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.chat-input-container, .chat-messages') || 
+                e.target.closest('.close-btn')) {
+                return; // Don't drag when clicking on input or close button
+            }
+            
+            isDragging = true;
+            chatPanel.classList.add('dragging');
+            
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            e.preventDefault();
+            
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+            
+            xOffset = currentX;
+            yOffset = currentY;
+            
+            // Constrain to viewport bounds
+            const panelRect = chatPanel.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            if (currentX < 0) currentX = 0;
+            if (currentY < 0) currentY = 0;
+            if (currentX + panelRect.width > viewportWidth) {
+                currentX = viewportWidth - panelRect.width;
+            }
+            if (currentY + panelRect.height > viewportHeight) {
+                currentY = viewportHeight - panelRect.height;
+            }
+            
+            xOffset = currentX;
+            yOffset = currentY;
+            
+            chatPanel.style.transform = `translate(${currentX}px, ${currentY}px)`;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                chatPanel.classList.remove('dragging');
+                
+                // Save position to localStorage
+                this.saveChatPosition(currentX, currentY);
+            }
+        });
+        
+        // Touch events for mobile
+        chatPanel.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.chat-input-container, .chat-messages') || 
+                e.target.closest('.close-btn')) {
+                return;
+            }
+            
+            isDragging = true;
+            chatPanel.classList.add('dragging');
+            
+            const touch = e.touches[0];
+            initialX = touch.clientX - xOffset;
+            initialY = touch.clientY - yOffset;
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            currentX = touch.clientX - initialX;
+            currentY = touch.clientY - initialY;
+            
+            xOffset = currentX;
+            yOffset = currentY;
+            
+            // Constrain to viewport bounds
+            const panelRect = chatPanel.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            if (currentX < 0) currentX = 0;
+            if (currentY < 0) currentY = 0;
+            if (currentX + panelRect.width > viewportWidth) {
+                currentX = viewportWidth - panelRect.width;
+            }
+            if (currentY + panelRect.height > viewportHeight) {
+                currentY = viewportHeight - panelRect.height;
+            }
+            
+            xOffset = currentX;
+            yOffset = currentY;
+            
+            chatPanel.style.transform = `translate(${currentX}px, ${currentY}px)`;
+        });
+        
+        document.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                chatPanel.classList.remove('dragging');
+                
+                // Save position to localStorage
+                this.saveChatPosition(currentX, currentY);
+            }
+        });
+        
+        // Load saved position
+        this.loadChatPosition();
+        
+        console.log('Draggable chat panel initialized');
+    }
+
+    // Save chat panel position to localStorage
+    saveChatPosition(x, y) {
+        try {
+            localStorage.setItem('chatPanelPosition', JSON.stringify({ x, y }));
+        } catch (e) {
+            console.log('Could not save chat position to localStorage');
+        }
+    }
+
+    // Load chat panel position from localStorage
+    loadChatPosition() {
+        try {
+            const savedPosition = localStorage.getItem('chatPanelPosition');
+            if (savedPosition) {
+                const { x, y } = JSON.parse(savedPosition);
+                const chatPanel = document.querySelector('.chat-panel');
+                if (chatPanel) {
+                    chatPanel.style.transform = `translate(${x}px, ${y}px)`;
+                    
+                    // Update offset variables
+                    const rect = chatPanel.getBoundingClientRect();
+                    if (rect.left !== 0 || rect.top !== 0) {
+                        // Position was loaded, update offsets
+                        this.xOffset = x;
+                        this.yOffset = y;
+                    }
+                }
+            }
+        } catch (e) {
+            console.log('Could not load chat position from localStorage');
+        }
+    }
+
+    // Reset chat panel to default position
+    resetChatPosition() {
+        const chatPanel = document.querySelector('.chat-panel');
+        if (chatPanel) {
+            chatPanel.style.transform = 'translate(0, 0)';
+            chatPanel.style.right = '2rem';
+            chatPanel.style.left = 'auto';
+            chatPanel.style.top = '50%';
+            chatPanel.style.transform = 'translateY(-50%)';
+            
+            // Clear saved position
+            localStorage.removeItem('chatPanelPosition');
+            
+            console.log('Chat panel position reset to default');
+        }
+    }
+
+    // Initialize navbar functionality
+    initializeNavbar() {
+        // Mobile menu toggle
+        const navToggle = document.getElementById('nav-toggle');
+        const navMenu = document.querySelector('.nav-menu');
+        
+        if (navToggle && navMenu) {
+            navToggle.addEventListener('click', () => {
+                navMenu.classList.toggle('active');
+                navToggle.classList.toggle('active');
+            });
+        }
+
+        // Navigation links
+        const navLinks = document.querySelectorAll('.nav-link[data-screen]');
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetScreen = link.getAttribute('data-screen');
+                if (targetScreen) {
+                    this.showScreen(targetScreen);
+                    this.updateActiveNavLink(link);
+                }
+            });
+        });
+
+        // User dropdown toggle
+        const userAvatar = document.getElementById('user-avatar-btn');
+        const userDropdown = document.getElementById('user-dropdown');
+        
+        if (userAvatar && userDropdown) {
+            userAvatar.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userDropdown.classList.toggle('active');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!userAvatar.contains(e.target) && !userDropdown.contains(e.target)) {
+                    userDropdown.classList.remove('active');
+                }
+            });
+        }
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!navToggle.contains(e.target) && !navMenu.contains(e.target)) {
+                navMenu.classList.remove('active');
+                navToggle.classList.remove('active');
+            }
+        });
+
+        // Initialize additional navigation handlers
+        this.handleSettingsNavigation();
+        this.handleHelpNavigation();
+
+        console.log('Navbar initialized');
+    }
+
+    // Update notification count
+    updateNotificationCount(count) {
+        const notificationBadge = document.querySelector('.notification-badge');
+        if (notificationBadge) {
+            if (count > 0) {
+                notificationBadge.textContent = count;
+                notificationBadge.style.display = 'block';
+            } else {
+                notificationBadge.style.display = 'none';
+            }
+        }
+    }
+
+    // Handle settings navigation
+    handleSettingsNavigation() {
+        const settingsLink = document.querySelector('.nav-link:has(svg[viewBox*="12 12"])');
+        if (settingsLink) {
+            settingsLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showSettingsScreen();
+            });
+        }
+    }
+
+    // Handle help navigation
+    handleHelpNavigation() {
+        const helpLink = document.querySelector('.nav-link:has(svg[viewBox*="12 12"][d*="9.09 9"])');
+        if (helpLink) {
+            helpLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showHelpScreen();
+            });
+        }
+    }
+
+    // Show settings screen (placeholder)
+    showSettingsScreen() {
+        // Create a simple settings overlay
+        const settingsOverlay = document.createElement('div');
+        settingsOverlay.className = 'settings-overlay';
+        settingsOverlay.innerHTML = `
+            <div class="settings-modal">
+                <div class="settings-header">
+                    <h2>Settings</h2>
+                    <button class="close-settings-btn">×</button>
+                </div>
+                <div class="settings-content">
+                    <div class="setting-group">
+                        <label>Video Quality</label>
+                        <select class="setting-select">
+                            <option value="auto">Auto</option>
+                            <option value="720p">720p</option>
+                            <option value="480p">480p</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label>Audio Quality</label>
+                        <select class="setting-select">
+                            <option value="auto">Auto</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" checked>
+                            <span class="checkmark"></span>
+                            Enable Notifications
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(settingsOverlay);
+
+        // Close settings
+        const closeBtn = settingsOverlay.querySelector('.close-settings-btn');
+        closeBtn.addEventListener('click', () => {
+            document.body.removeChild(settingsOverlay);
+        });
+
+        // Close on outside click
+        settingsOverlay.addEventListener('click', (e) => {
+            if (e.target === settingsOverlay) {
+                document.body.removeChild(settingsOverlay);
+            }
+        });
+    }
+
+    // Show help screen (placeholder)
+    showHelpScreen() {
+        const helpOverlay = document.createElement('div');
+        helpOverlay.className = 'help-overlay';
+        helpOverlay.innerHTML = `
+            <div class="help-modal">
+                <div class="help-header">
+                    <h2>Help & Support</h2>
+                    <button class="close-help-btn">×</button>
+                </div>
+                <div class="help-content">
+                    <div class="help-section">
+                        <h3>Getting Started</h3>
+                        <p>1. Complete your profile setup</p>
+                        <p>2. Click "Start Video Chat" to find a partner</p>
+                        <p>3. Use the controls to manage your video/audio</p>
+                    </div>
+                    <div class="help-section">
+                        <h3>Controls</h3>
+                        <p>🎥 Toggle Video - Turn your camera on/off</p>
+                        <p>🎤 Toggle Audio - Mute/unmute your microphone</p>
+                        <p>⏭️ Next Chat - Skip to a new partner</p>
+                        <p>📞 End Chat - End the current conversation</p>
+                    </div>
+                    <div class="help-section">
+                        <h3>Need More Help?</h3>
+                        <p>Contact support at: support@videochat.com</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(helpOverlay);
+
+        // Close help
+        const closeBtn = helpOverlay.querySelector('.close-help-btn');
+        closeBtn.addEventListener('click', () => {
+            document.body.removeChild(helpOverlay);
+        });
+
+        // Close on outside click
+        helpOverlay.addEventListener('click', (e) => {
+            if (e.target === helpOverlay) {
+                document.body.removeChild(helpOverlay);
+            }
+        });
+    }
+
+    // Update active navigation link
+    updateActiveNavLink(activeLink) {
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        activeLink.classList.add('active');
+    }
+
+    // Show specific screen
+    showScreen(screenId) {
+        // Hide all screens
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('active');
+        });
+        
+        // Show target screen
+        const targetScreen = document.getElementById(screenId);
+        if (targetScreen) {
+            targetScreen.classList.add('active');
+        }
     }
 
     initializeElements() {
@@ -149,6 +1025,14 @@ class VideoChat {
             this.sendMessage();
         });
         
+        // Add reset chat position button listener
+        const resetChatPositionBtn = document.getElementById('reset-chat-position-btn');
+        if (resetChatPositionBtn) {
+            resetChatPositionBtn.addEventListener('click', () => {
+                this.resetChatPosition();
+            });
+        }
+        
         this.debugMediaBtn.addEventListener('click', () => {
             console.log('Debug media clicked');
             this.debugMediaStates();
@@ -161,6 +1045,15 @@ class VideoChat {
             if (e.key === 'Enter') {
                 console.log('Enter pressed in chat input');
                 this.sendMessage();
+            }
+        });
+
+        // Add keyboard shortcut for debugging skip history (Ctrl+Shift+S)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                e.preventDefault();
+                console.log('Skip history debug shortcut triggered');
+                this.debugSkipHistory();
             }
         });
         
@@ -922,6 +1815,15 @@ async checkMediaTransmission() {
                 const partnerId = roomParts[1] === myId ? roomParts[2] : roomParts[1];
                 this.addToSkipHistory(partnerId);
                 console.log(`Added partner ${partnerId} to skip history`);
+                console.log(`Current skip history:`, this.getSkipHistoryInfo());
+                
+                // IMPORTANT: Tell the server we're skipping this user before looking for a new match
+                this.socket.emit('leave-room', { 
+                    roomId: this.currentRoom, 
+                    isSkip: true,
+                    skippedUserId: partnerId 
+                });
+                console.log(`Sent skip notification to server for partner ${partnerId}`);
             }
         }
         
@@ -942,20 +1844,25 @@ async checkMediaTransmission() {
         // Stay on chat screen but show "looking for partner" status
         // Don't change screens - keep user on video chat screen like Omegle
         
-        // Prepare user data for matching
-        const userData = {
-            timestamp: Date.now(),
-            profile: this.userProfile,
-            country: this.userCountry || this.userProfile?.country,
-            gender: this.userProfile?.gender,
-            genderPreference: this.userProfile?.genderPreference,
-            preferredCountries: this.userProfile?.preferredCountries || ['any'],
-            countryFilter: this.userProfile?.countryFilter || 'any'
-        };
-        
+        // Wait a bit for the server to process the skip before looking for a new match
         setTimeout(() => {
+            // Prepare user data for matching
+            const userData = {
+                timestamp: Date.now(),
+                profile: this.userProfile,
+                country: this.userCountry || this.userProfile?.country,
+                gender: this.userProfile?.gender,
+                genderPreference: this.userProfile?.genderPreference,
+                preferredCountries: this.userProfile?.preferredCountries || ['any'],
+                countryFilter: this.userProfile?.countryFilter || 'any'
+            };
+            
+            // Add skip history to user data so server can avoid matching with recently skipped users
+            userData.skipHistory = Array.from(this.skipHistory.keys());
+            console.log(`Sending find-match with skip history:`, userData.skipHistory);
+            
             this.socket.emit('find-match', userData);
-        }, 500);
+        }, 1000); // Increased delay to ensure server processes the skip
     }
 
     endChat() {
@@ -1385,8 +2292,24 @@ async checkMediaTransmission() {
         return {
             totalSkipped: this.skipHistory.size,
             activeSkips: activeSkips.length,
-            skipTimeout: Math.ceil(this.skipHistoryTimeout / 1000) // Convert to seconds
+            skipTimeout: Math.ceil(this.skipHistoryTimeout / 1000), // Convert to seconds
+            details: activeSkips
         };
+    }
+
+    // Debug method to show skip history in console and status
+    debugSkipHistory() {
+        const info = this.getSkipHistoryInfo();
+        console.log('=== SKIP HISTORY DEBUG ===');
+        console.log(`Total skipped users: ${info.totalSkipped}`);
+        console.log(`Active skips: ${info.activeSkips}`);
+        console.log(`Skip timeout: ${info.skipTimeout} seconds`);
+        console.log('Active skip details:', info.details);
+        console.log('Full skip history map:', this.skipHistory);
+        console.log('==========================');
+        
+        // Also show in status bar for easy viewing
+        this.updateStatus(`Skip History: ${info.activeSkips} active skips, ${info.totalSkipped} total`);
     }
 
     showScreen(screenName) {
